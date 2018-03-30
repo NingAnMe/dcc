@@ -76,7 +76,6 @@ if __name__ == '__main__':
                 FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
                     satFlag, each, ch, rollday)
                 DccFile = os.path.join(ipath, FileName)
-                print DccFile
                 ######### 一、读取dcc提取后的标准文件 ##############
                 ary = DccDataRead(DccFile)
 
@@ -116,7 +115,7 @@ if __name__ == '__main__':
                 p.title = u'%s %s 时序图' % (satFlag, ch)
                 p.ylabel = u'%s Avg' % each
                 p.savefig(outPng_avg)
-
+                print(outPng_avg)
                 p = dv_plt.dv_time_series(figsize=(8, 4))
                 p.fig.subplots_adjust(bottom=0.15)
                 #                 p.y_fmt = "%0.3f"
@@ -125,7 +124,7 @@ if __name__ == '__main__':
                 p.title = u'%s %s 时序图' % (satFlag, ch)
                 p.ylabel = u'%s Med' % each
                 p.savefig(outPng_med)
-
+                print(outPng_med)
                 p = dv_plt.dv_time_series(figsize=(8, 4))
                 p.fig.subplots_adjust(bottom=0.15)
                 #                 p.y_fmt = "%0.3f"
@@ -134,6 +133,6 @@ if __name__ == '__main__':
                 p.title = u'%s %s 时序图' % (satFlag, ch)
                 p.ylabel = u'%s Mod' % each
                 p.savefig(outPng_mod)
-
+                print(outPng_mod)
     else:  # 没有参数 输出帮助信息
         print help_info
