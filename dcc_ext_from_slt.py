@@ -57,7 +57,8 @@ class DccDataRead():
         for iFile in FileLst:
             try:
                 h5File_R = h5py.File(iFile, 'r')
-                percent = h5File_R.get('DCC_Percent')[:]
+                # 针对 FY3D 做的调整， DCC_Percent 在 3D 是 3维， 3C 是 2维
+                percent = h5File_R.get('DCC_Percent')[0]
                 dn = h5File_R.get('DN_ADMs')[:]
                 ref = h5File_R.get('REF_ADMs')[:]
                 h5File_R.close()
@@ -73,9 +74,9 @@ class DccDataRead():
             # 其他数据追加
             else:
                 self.percent = np.concatenate((self.percent, percent), axis=0)
-
                 self.dn = np.concatenate((self.dn, dn), axis=1)
                 self.ref = np.concatenate((self.ref, ref), axis=1)
+
 
 def DccDataProcess(data, share):
     '''
@@ -209,19 +210,17 @@ if __name__ == '__main__':
         rollday = int(inCfg['ext'][satFlag]['rollday'])
         share = int(inCfg['ext'][satFlag]['share'])
         window = int(inCfg['ext'][satFlag]['window'])
-
         # 按天处理
         while date_s <= date_e:
             ymd = date_s.strftime('%Y%m%d')
 
-            ######### 一、查找当前天滚动后的所有文件                            ##############
+            ######### 一、查找当前天滚动后的所有文件 ##############
             FileLst = DccFineFile(ipath, ifile, date_s, rollday)
 
             ######### 二、读取所rolldays条件内所有文件并对数据累加 #############
             dcc = DccDataRead()
             dcc.FileLst = FileLst
             dcc.Load()
-
             if len(FileLst) != 0:
                 ######### 三、计算中值，均值，概率密度 #############################
 
