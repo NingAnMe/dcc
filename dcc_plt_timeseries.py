@@ -71,6 +71,8 @@ if __name__ == '__main__':
         band = inCfg['plt'][satFlag]['band']
 
         # 拼接需要读取的文件
+        if not isinstance(var, list):
+            var = [var]
         for each in var:
             for ch in band:
                 FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
