@@ -63,6 +63,8 @@ if __name__ == '__main__':
         #             print 'not support satellite: %s' % satFlag
         #             sys.exit(-1)
 
+        sat1, sat2 = satFlag.split('_')
+
         ipath = inCfg['plt'][satFlag]['ipath']
         opath = inCfg['plt'][satFlag]['opath']
         rollday = inCfg['plt'][satFlag]['rollday']
@@ -86,14 +88,23 @@ if __name__ == '__main__':
                 FirstAvg = ary['Avg'][idx]
                 FirstMed = ary['Med'][idx]
                 FirstMod = ary['Mod'][idx]
+                # 如果是 DN，需要计算和发星第一天的相对百分比
                 if 'DN' in each:
                     AvgATT = (ary['Avg'] / FirstAvg) * 100
                     MedATT = (ary['Med'] / FirstAvg) * 100
                     ModATT = (ary['Mod'] / FirstAvg) * 100
-                else:
-                    AvgATT = ary['Avg'] / 100.
-                    MedATT = ary['Med'] / 100.
-                    ModATT = ary['Mod'] / 100.
+                elif 'REF' in each:
+                    # 如果是绘制相对偏差，已经是计算好的相对百分比，不需要除100
+                    # sat2 存在，代表是绘制两颗卫星的相对偏差
+                    if sat2:
+                        AvgATT = ary['Avg']
+                        MedATT = ary['Med']
+                        ModATT = ary['Mod']
+                    # 如果是绘制自身 REF 变化，需要除 100，还原 REF 真实值
+                    else:
+                        AvgATT = ary['Avg'] / 100.
+                        MedATT = ary['Med'] / 100.
+                        ModATT = ary['Mod'] / 100.
 
                 ######## 三、绘图   ###################
                 outPng_avg = os.path.join(opath,
