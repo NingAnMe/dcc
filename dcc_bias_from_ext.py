@@ -161,15 +161,14 @@ if __name__ == '__main__':
                     dates = ary1['ymd']
                     for ymd in dates:
                         idx1 = np.where(ymd == ary1['ymd'])
-                        idx1 = idx1[0][0]
                         avg1 = ary1['Avg'][idx1]
                         med1 = ary1['Med'][idx1]
                         mod1 = ary1['Mod'][idx1]
 
                         idx2 = np.where(ch2 == ary2['chan'])
-                        avg2 = ary2['Avg'][idx2]
-                        med2 = ary2['Med'][idx2]
-                        mod2 = ary2['Mod'][idx2]
+                        avg2 = ary2['Avg'][idx2] * 100
+                        med2 = ary2['Med'][idx2] * 100
+                        mod2 = ary2['Mod'][idx2] * 100
 
                         bias_avg = ((avg1 - avg2) / avg2) * 100.
                         bias_med = ((med1 - med2) / avg2) * 100.
@@ -200,6 +199,7 @@ if __name__ == '__main__':
                         med2 = ary2['Med'][idx2] * slope[idx] + intercept[idx]
                         mod2 = ary2['Mod'][idx2] * slope[idx] + intercept[idx]
 
+                        # 计算相对偏差 Bias = (SAT1的反射率 - 基准反射率) / 基准反射率 * 100%
                         bias_avg = ((avg1 - avg2) / avg2) * 100.
                         bias_med = ((med1 - med2) / avg2) * 100.
                         bias_mod = ((mod1 - mod2) / avg2) * 100.
