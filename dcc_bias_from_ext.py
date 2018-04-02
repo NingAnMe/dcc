@@ -86,7 +86,7 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     help_info = \
         u'''
-            【参数1】：SAT+SENSOR or SAT1_SAT2 or SAT+SENSOR_STANDARD
+            【参数1】：SAT or SAT+SENSOR or SAT1_SAT2 or SAT+SENSOR_STANDARD
             【参数2】：yyyymmdd-yyyymmdd
         '''
     if '-h' in args:
