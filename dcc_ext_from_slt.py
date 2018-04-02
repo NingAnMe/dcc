@@ -40,13 +40,13 @@ def DccFineFile(ipath, ifile, C_date, rolldays):
 
     return FileLst
 
+
 class DccDataRead():
-    '''
+    """
     percent:数据集中的dcc_percent
     dn:数据集中的DN_ADMS
     ref:数据集中的REF_ADMS
-    
-    '''
+    """
     def __init__(self):
         self.percent = []
         self.dn = []
@@ -67,7 +67,7 @@ class DccDataRead():
                 print str(e)
 
             # 第一个数据
-            if self.dn == []:
+            if not self.dn:
                 self.percent = percent
                 self.dn = dn
                 self.ref = ref
@@ -79,9 +79,9 @@ class DccDataRead():
 
 
 def DccDataProcess(data, share):
-    '''
+    """
     计算所有通道指定的，3x3 或是 5x5或是其他区域的均值，中值，和概率密度
-    '''
+    """
     # 均值
     # 过滤无效值
 
@@ -129,11 +129,11 @@ def DccDataProcess(data, share):
 
 
 def DccDataWrite(title , data, outFile):
-    '''
+    """
     title: 标题
     data： 数据体
     outFile:输出文件
-    '''
+    """
 
     allLines = []
     DICT_D = {}
@@ -192,7 +192,6 @@ if __name__ == '__main__':
     # 载入配置文件
     inCfg = ConfigObj(cfgFile)
 
-
     if len(args) == 2:  # 需要跟俩个参数执行
         satFlag = args[0]
         str_time = args[1]
@@ -242,10 +241,10 @@ if __name__ == '__main__':
                     DnPoints = len(dcc.dn[i, :, window])
 
                     ##### 3、拼接文件头和数据体信息
-                    Title = ('%-15s' * 8 + '\n') % ('date' , 'Avg', 'Med', 'Mod', 'dccFiles',
-                                                      'dccPoint', 'dccPrecent', 'dccDim')
+                    Title = ('%-15s' * 8 + '\n') % ('date', 'Avg', 'Med', 'Mod', 'dccFiles',
+                                                    'dccPoint', 'dccPrecent', 'dccDim')
                     Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (ymd, Dn_mean[i], Dn_median[i], Dn_mode[i],
-                                                                                dccFiles, DnPoints, percent, window)
+                                                                             dccFiles, DnPoints, percent, window)
                     ##### 4、写入文件
                     DccDataWrite(Title, Data, dnOutFile)
                 ######### 写入Ref值
@@ -262,10 +261,10 @@ if __name__ == '__main__':
                     RefPoints = len(dcc.ref[i, :, window])
 
                     ##### 3、拼接文件头信息
-                    Title = ('%-15s' * 8 + '\n') % ('date' , 'Avg', 'Med', 'Mod', 'dccFiles',
-                                                      'dccPoint', 'dccPrecent', 'dccDim')
+                    Title = ('%-15s' * 8 + '\n') % ('date', 'Avg', 'Med', 'Mod', 'dccFiles',
+                                                    'dccPoint', 'dccPrecent', 'dccDim')
                     Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (ymd, Ref_mean[i], Ref_median[i], Ref_mode[i],
-                                                                                dccFiles, DnPoints, percent, window)
+                                                                             dccFiles, DnPoints, percent, window)
                     ##### 4、写入文件
                     DccDataWrite(Title, Data, refOutFile)
 
@@ -273,5 +272,3 @@ if __name__ == '__main__':
 
     else:  # 没有参数 输出帮助信息
         print help_info
-
-
