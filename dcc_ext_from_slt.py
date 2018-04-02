@@ -67,7 +67,7 @@ class DccDataRead():
                 print str(e)
 
             # 第一个数据
-            if not self.dn:
+            if self.dn == []:
                 self.percent = percent
                 self.dn = dn
                 self.ref = ref
@@ -264,7 +264,7 @@ if __name__ == '__main__':
                     Title = ('%-15s' * 8 + '\n') % ('date', 'Avg', 'Med', 'Mod', 'dccFiles',
                                                     'dccPoint', 'dccPrecent', 'dccDim')
                     Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (ymd, Ref_mean[i], Ref_median[i], Ref_mode[i],
-                                                                             dccFiles, DnPoints, percent, window)
+                                                                             dccFiles, RefPoints, percent, window)
                     ##### 4、写入文件
                     DccDataWrite(Title, Data, refOutFile)
 
