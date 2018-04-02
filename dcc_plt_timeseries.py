@@ -62,8 +62,10 @@ if __name__ == '__main__':
         #         if satFlag not in inCfg.keys():
         #             print 'not support satellite: %s' % satFlag
         #             sys.exit(-1)
-
-        sat1, sat2 = satFlag.split('_')
+        try:
+            sat1, sat2 = satFlag.split('_')
+        except ValueError:
+            sat2 = None
 
         ipath = inCfg['plt'][satFlag]['ipath']
         opath = inCfg['plt'][satFlag]['opath']
@@ -75,6 +77,7 @@ if __name__ == '__main__':
         # 拼接需要读取的文件
         if not isinstance(var, list):
             var = [var]
+        print(var)
         for each in var:
             for ch in band:
                 FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
