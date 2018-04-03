@@ -58,7 +58,7 @@ class DccDataRead():
             try:
                 h5File_R = h5py.File(iFile, 'r')
                 # 针对 FY3D 做的调整， DCC_Percent 在 3D 是 3维， 3C 是 2维
-                percent = h5File_R.get('DCC_Percent')[0]
+                percent = h5File_R.get('DCC_Percent')[2]
                 dn = h5File_R.get('DN_ADMs')[:]
                 ref = h5File_R.get('REF_ADMs')[:]
                 h5File_R.close()
