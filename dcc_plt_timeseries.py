@@ -253,10 +253,11 @@ if __name__ == '__main__':
                     for i in xrange(len(ary['ymd'])):
                         dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
                         date_D.append(dtime)
-                    try:
+                    if sat2:
                         title = '%s Minus %s %s TimeSeries' % (sat1, sat2, ch)
-                    except TypeError:
+                    else:
                         title = '%s %s TimeSeries' % (sat1, ch)
+                    print title
                     data_name = '%sATT' % date_type
                     data_D = datas.get(data_name)
                     plot_bias(date_D, data_D, outPng, title, date_s, date_e,
