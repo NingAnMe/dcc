@@ -10,9 +10,13 @@ from datetime import datetime
 from configobj import ConfigObj
 
 import numpy as np
+from matplotlib.ticker import MultipleLocator
 
-from PB import pb_time
+from PB import pb_time, pb_io
 from DV import dv_plt
+from DV.dv_pub_legacy import plt, mdates, set_tick_font, FONT0
+
+from DM.SNO.dm_sno_cross_calc_map import RED, BLUE, EDGE_GRAY, ORG_NAME, mpatches
 
 
 def DccDataRead(iFile):
@@ -27,6 +31,114 @@ def DccDataRead(iFile):
                       skiprows=1, ndmin=1)
 
     return arys
+
+
+def setXLocator(ax, xlim_min, xlim_max):
+    day_range = (xlim_max - xlim_min).days
+#     if day_range <= 2:
+#         days = mdates.HourLocator(interval=4)
+#         ax.xaxis.set_major_locator(days)
+#         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H'))
+    if day_range <= 60:
+        days = mdates.DayLocator(interval=(day_range / 6))
+        ax.xaxis.set_major_locator(days)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d'))
+    else:
+        month_range = day_range / 30
+        if month_range <= 12.:
+            months = mdates.MonthLocator()  # every month
+            ax.xaxis.set_major_locator(months)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        elif month_range <= 24.:
+            months = mdates.MonthLocator(interval=2)
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        elif month_range <= 48.:
+            months = mdates.MonthLocator(interval=4)
+            ax.xaxis.set_major_locator(months)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        else:
+            years = mdates.YearLocator()
+            ax.xaxis.set_major_locator(years)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+
+        if month_range <= 48:
+            add_year_xaxis(ax, xlim_min, xlim_max)
+
+
+def add_year_xaxis(ax, xlim_min, xlim_max):
+    """
+    add year xaxis
+    """
+    if xlim_min.year == xlim_max.year:
+        ax.set_xlabel(xlim_min.year, fontsize=11, fontproperties=FONT0)
+        return
+    newax = ax.twiny()
+    newax.set_frame_on(True)
+    newax.grid(False)
+    newax.patch.set_visible(False)
+    newax.xaxis.set_ticks_position('bottom')
+    newax.xaxis.set_label_position('bottom')
+    newax.set_xlim(xlim_min, xlim_max)
+    newax.xaxis.set_major_locator(mdates.YearLocator())
+    newax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    newax.spines['bottom'].set_position(('outward', 20))
+    newax.spines['bottom'].set_linewidth(0.6)
+
+    newax.tick_params(which='both', direction='in')
+    set_tick_font(newax)
+    newax.xaxis.set_tick_params(length=5)
+
+
+def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type):
+    """
+    画偏差时序折线图
+    """
+    plt.style.use(os.path.join(dvPath, 'dv_pub_legacy.mplstyle'))
+    fig = plt.figure(figsize=(6, 4))
+#     plt.subplots_adjust(left=0.13, right=0.95, bottom=0.11, top=0.97)
+
+    plt.plot(date_D, bias_D, 'x', ms=6,
+             markerfacecolor=None, markeredgecolor=BLUE, alpha=0.8,
+             mew=0.3, label='Daily')
+
+    plt.grid(True)
+    plt.ylabel('%s %s' % (each, date_type), fontsize=11, fontproperties=FONT0)
+
+    xlim_min = pb_time.ymd2date('%04d%02d01' % (date_s.year, date_s.month))
+    xlim_max = date_e
+    plt.xlim(xlim_min, xlim_max)
+
+    ax = plt.gca()
+    # format the ticks
+    setXLocator(ax, xlim_min, xlim_max)
+    set_tick_font(ax)
+
+    # title
+    plt.title(title, fontsize=12, fontproperties=FONT0)
+
+    plt.tight_layout()
+    #--------------------
+    fig.subplots_adjust(bottom=0.2)
+
+    circle1 = mpatches.Circle((74, 15), 6, color=BLUE, ec=EDGE_GRAY, lw=0)
+    # circle2 = mpatches.Circle((164, 15), 6, color=RED, ec=EDGE_GRAY, lw=0)
+    fig.patches.extend([circle1])
+
+    fig.text(0.15, 0.02, 'Daily', color=BLUE, fontproperties=FONT0)
+
+    ymd_s, ymd_e = date_s.strftime('%Y%m%d'), date_e.strftime('%Y%m%d')
+    if ymd_s != ymd_e:
+        fig.text(0.50, 0.02, '%s-%s' % (ymd_s, ymd_e), fontproperties=FONT0)
+    else:
+        fig.text(0.50, 0.02, '%s' % ymd_s, fontproperties=FONT0)
+
+    fig.text(0.8, 0.02, ORG_NAME, fontproperties=FONT0)
+    #---------------
+    pb_io.make_sure_path_exists(os.path.dirname(picPath))
+    plt.savefig(picPath)
+    fig.clear()
+    plt.close()
 
 
 ########################### 主程序入口 ############################
@@ -45,6 +157,8 @@ if __name__ == '__main__':
     # 获取程序所在位置，拼接配置文件
     MainPath, MainFile = os.path.split(os.path.realpath(__file__))
     ProjPath = os.path.dirname(MainPath)
+    omPath = os.path.dirname(ProjPath)
+    dvPath = os.path.join(os.path.dirname(omPath), 'DV')
     cfgFile = os.path.join(MainPath, 'global_dcc.cfg')
     # 配置不存在预警
     if not os.path.isfile(cfgFile):
@@ -108,47 +222,32 @@ if __name__ == '__main__':
                         AvgATT = ary['Avg'] / 100.
                         MedATT = ary['Med'] / 100.
                         ModATT = ary['Mod'] / 100.
+                datas = {
+                    'AvgATT': AvgATT,
+                    'MedATT': MedATT,
+                    'ModATT': ModATT,
+                }
 
                 ######## 三、绘图   ###################
-                outPng_avg = os.path.join(opath,
-                                          'DCC_%s_%s_%s_Rolldays_%s_Timeseries_Avg.png' % (
-                                              satFlag, each, ch, rollday))
-                outPng_med = os.path.join(opath,
-                                          'DCC_%s_%s_%s_Rolldays_%s_Timeseries_Med.png' % (
-                                              satFlag, each, ch, rollday))
-                outPng_mod = os.path.join(opath,
-                                          'DCC_%s_%s_%s_Rolldays_%s_Timeseries_Mod.png' % (
-                                              satFlag, each, ch, rollday))
-                x = []
-                for i in xrange(len(ary['ymd'])):
-                    dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
-                    x.append(dtime)
-                p = dv_plt.dv_time_series(figsize=(8, 4))
-                p.fig.subplots_adjust(bottom=0.15)
-                #                 p.y_fmt = "%0.3f"
-                p.easyplot(x, AvgATT, 'r', 'avg', marker='x-', markersize=3,
-                           mec="r")
-                p.title = u'%s %s 时序图' % (satFlag, ch)
-                p.ylabel = u'%s Avg' % each
-                p.savefig(outPng_avg)
-                print(outPng_avg)
-                p = dv_plt.dv_time_series(figsize=(8, 4))
-                p.fig.subplots_adjust(bottom=0.15)
-                #                 p.y_fmt = "%0.3f"
-                p.easyplot(x, MedATT, 'r', 'med', marker='x-', markersize=3,
-                           mec="r")
-                p.title = u'%s %s 时序图' % (satFlag, ch)
-                p.ylabel = u'%s Med' % each
-                p.savefig(outPng_med)
-                print(outPng_med)
-                p = dv_plt.dv_time_series(figsize=(8, 4))
-                p.fig.subplots_adjust(bottom=0.15)
-                #                 p.y_fmt = "%0.3f"
-                p.easyplot(x, ModATT, 'r', 'mod', marker='x-', markersize=3,
-                           mec="r")
-                p.title = u'%s %s 时序图' % (satFlag, ch)
-                p.ylabel = u'%s Mod' % each
-                p.savefig(outPng_mod)
-                print(outPng_mod)
+                date_types = ['Avg', 'Med', 'Mod']
+                for date_type in date_types:
+                    outPng = os.path.join(opath,
+                                          'DCC_%s_%s_%s_Rolldays_%s_Timeseries_%s.png' % (
+                                           satFlag, each, ch, rollday, date_type))
+
+                    date_D = []
+                    for i in xrange(len(ary['ymd'])):
+                        dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
+                        date_D.append(dtime)
+                    try:
+                        title = '%s Minus %s %s TimeSeries' % (sat1, sat2, ch)
+                    except TypeError:
+                        title = '%s %s TimeSeries' % (sat1, ch)
+                    data_name = '%sATT' % date_type
+                    data_D = datas.get(data_name)
+                    plot_bias(date_D, data_D, outPng, title, date_s, date_e,
+                              each, date_type)
+                    print(outPng)
+
     else:  # 没有参数 输出帮助信息
         print help_info
