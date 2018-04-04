@@ -179,6 +179,7 @@ if __name__ == '__main__':
         try:
             sat1, sat2 = satFlag.split('_')
         except ValueError:
+            sat1 = satFlag
             sat2 = None
 
         ipath = inCfg['plt'][satFlag]['ipath']
