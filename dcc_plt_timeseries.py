@@ -90,7 +90,8 @@ def add_year_xaxis(ax, xlim_min, xlim_max):
     newax.xaxis.set_tick_params(length=5)
 
 
-def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type):
+def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
+              ylim_min, ylim_max):
     """
     画偏差时序折线图
     """
@@ -107,12 +108,19 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type):
 
     xlim_min = pb_time.ymd2date('%04d%02d01' % (date_s.year, date_s.month))
     xlim_max = date_e
-    plt.xlim(xlim_min, xlim_max)
 
+    plt.plot([xlim_min, xlim_max], [0, 0], 'k')  # 在 y = 0 绘制一条黑色直线
+
+    plt.xlim(xlim_min, xlim_max)
+    plt.ylim(ylim_min, ylim_max)
     ax = plt.gca()
     # format the ticks
+    interval = (ylim_max - ylim_min) // 8
+    minibar = interval / 2.
     setXLocator(ax, xlim_min, xlim_max)
     set_tick_font(ax)
+    ax.yaxis.set_major_locator(MultipleLocator(interval))
+    ax.yaxis.set_minor_locator(MultipleLocator(minibar))
 
     # title
     plt.title(title, fontsize=12, fontproperties=FONT0)
@@ -188,13 +196,15 @@ if __name__ == '__main__':
         lanch_date = inCfg['plt'][satFlag]['lanch_date']
         var = inCfg['plt'][satFlag]['var']
         band = inCfg['plt'][satFlag]['band']
+        min_y = inCfg['plt'][satFlag]['min_y']
+        max_y = inCfg['plt'][satFlag]['max_y']
 
         # 拼接需要读取的文件
         if not isinstance(var, list):
             var = [var]
         print(var)
         for each in var:
-            for ch in band:
+            for k, ch in enumerate(band):
                 FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
                     satFlag, each, ch, rollday)
                 DccFile = os.path.join(ipath, FileName)
@@ -230,6 +240,9 @@ if __name__ == '__main__':
                 }
 
                 ######## 三、绘图   ###################
+                # 绘图 y 轴的数据范围
+                min_yaxis = int(min_y[k])
+                max_yaxis = int(max_y[k])
                 date_types = ['Avg', 'Med', 'Mod']
                 for date_type in date_types:
                     outPng = os.path.join(opath,
@@ -247,7 +260,7 @@ if __name__ == '__main__':
                     data_name = '%sATT' % date_type
                     data_D = datas.get(data_name)
                     plot_bias(date_D, data_D, outPng, title, date_s, date_e,
-                              each, date_type)
+                              each, date_type, min_yaxis, max_yaxis)
                     print(outPng)
 
     else:  # 没有参数 输出帮助信息
