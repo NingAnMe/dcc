@@ -45,12 +45,12 @@ class PROJ_COMM(object):
         self.ofile_txt = cfg['PATH']['opath_txt']
 
         self.cmd = cfg['PROJ']['cmd']
-        self.nlat = cfg['PROJ']['nlat']
-        self.slat = cfg['PROJ']['slat']
-        self.wlon = cfg['PROJ']['wlon']
-        self.elon = cfg['PROJ']['elon']
-        self.resLat = cfg['PROJ']['resLat']
-        self.resLon = cfg['PROJ']['resLon']
+        self.nlat = float(cfg['PROJ']['nlat'])
+        self.slat = float(cfg['PROJ']['slat'])
+        self.wlon = float(cfg['PROJ']['wlon'])
+        self.elon = float(cfg['PROJ']['elon'])
+        self.resLat = float(cfg['PROJ']['resLat'])
+        self.resLon = float(cfg['PROJ']['resLon'])
 
     def proj_fy2_dcc(self):
         print self.ymd
