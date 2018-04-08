@@ -126,10 +126,13 @@ class PROJ_COMM(object):
 
         ###########################################
         # read hdf file and cont values
+        print("write txt %s" % self.ymd)
+        if not os.path.exists(self.ofile_txt):
+            os.mkdir(self.ofile_txt)
         opath_txt = os.path.join(self.ofile_txt,
                                  '%s_dcc_daily_count.txt' % self.sat_sensor)
-        if len(self.ifile) == 1 and len(self.ymd) == 8:
-            print 'ssss'
+
+        if self.ifile and len(self.ymd) == 8:
             daily_hdf = h5py.File(opath_hdf)
             data_mat = daily_hdf.get("proj_data_nums", 'r')
             count_value = np.sum(data_mat)
