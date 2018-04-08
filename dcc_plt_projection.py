@@ -62,24 +62,23 @@ class PROJ_COMM(object):
         row = proj_data_num.shape[0]
         col = proj_data_num.shape[1]
 
-        for L1File in self.ifile:
-            #        #    print L1File
+        # for L1File in self.ifile:
+        L1File = self.ifile
+        h5File = h5py.File(L1File, 'r')
+        lons = h5File.get('Longitude')[:]
+        lats = h5File.get('Latitude')[:]
+        lons = lons / 100.
+        lats = lats / 100.
+        h5File.close()
+        ii, jj = lookup_table.lonslats2ij(lons, lats)
 
-            h5File = h5py.File(L1File, 'r')
-            lons = h5File.get('Longitude')[:]
-            lats = h5File.get('Latitude')[:]
-            lons = lons / 100.
-            lats = lats / 100.
-            h5File.close()
-            ii, jj = lookup_table.lonslats2ij(lons, lats)
-
-            for i in xrange(row):
-                for j in xrange(col):
-                    condition = np.logical_and(ii[:, 0] == i, jj[:, 0] == j)
-                    idx = np.where(condition)
-                    #          if len(idx[0]) > 0:
-                    #             print len(idx[0])
-                    proj_data_num[i][j] = proj_data_num[i][j] + len(idx[0])
+        for i in xrange(row):
+            for j in xrange(col):
+                condition = np.logical_and(ii[:, 0] == i, jj[:, 0] == j)
+                idx = np.where(condition)
+                #          if len(idx[0]) > 0:
+                #             print len(idx[0])
+                proj_data_num[i][j] = proj_data_num[i][j] + len(idx[0])
 
         proj_data_num = np.ma.masked_where(proj_data_num == 0, proj_data_num)
         p = dv_map.dv_map()
@@ -90,11 +89,11 @@ class PROJ_COMM(object):
         title_name = '%s_dcc_projection_' % self.sat + str(self.ymd)
         p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
 
-        fig_name = self.ofile + '/%s' % self.ymd[:6]
-        if not os.path.exists(fig_name):
-            os.mkdir(fig_name)
+        opath_fig = self.ofile + '/%s' % self.ymd[:6]
+        if not os.path.exists(opath_fig):
+            os.mkdir(opath_fig)
 
-        fig_name = fig_name + '/%s_%s_dcc.png' % (self.sat, self.ymd)
+        fig_name = opath_fig + '/%s_%s_dcc.png' % (self.sat, self.ymd)
         p.savefig(fig_name)
         opath_hdf = self.ofile + '/%s' % self.ymd[:6]
         if not os.path.exists(opath_hdf):
