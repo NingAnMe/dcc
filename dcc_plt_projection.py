@@ -37,7 +37,10 @@ class PROJ_COMM(object):
             cfg = yaml.load(stream)
         self.sat = cfg['INFO']['sat']
         self.sensor = cfg['INFO']['sensor']
-        self.sat_sensor = "%s+%s" % (self.sat, self.sensor)
+        if self.sat and self.sensor:
+            self.sat_sensor = "%s+%s" % (self.sat, self.sensor)
+        else:
+            self.sat_sensor = self.sat
 
         self.ymd = ymd
 
