@@ -20,11 +20,12 @@ import numpy as np
 
 from DP.dp_prj import prj_gll
 from DV import dv_map
+from PB.pb_io import make_sure_path_exists
 
 
 class PROJ_COMM(object):
 
-    def __init__(self, in_proj_cfg):
+    def __init__(self, in_proj_cfg, ymd):
         """
         读取yaml格式配置文件
         """
@@ -36,9 +37,10 @@ class PROJ_COMM(object):
             cfg = yaml.load(stream)
         self.sat = cfg['INFO']['sat']
         self.sensor = cfg['INFO']['sensor']
-        self.ymd = cfg['INFO']['ymd']
+        # self.ymd = cfg['INFO']['ymd']
+        self.ymd = ymd
 
-        self.ifile = cfg['PATH']['ipath']
+        self.ifile = cfg['PATH']['ipath']  # SLT 数据文件
         self.ofile = cfg['PATH']['opath']
         self.ofile_txt = cfg['PATH']['opath_txt']
 
@@ -63,8 +65,10 @@ class PROJ_COMM(object):
         col = proj_data_num.shape[1]
 
         # for L1File in self.ifile:
-        L1File = self.ifile
-        h5File = h5py.File(L1File, 'r')
+        ym = self.ymd[:6]
+        file_name = '%s+%s_DCC_SLT_%s.H5' % (self.sat, self.sensor, self.ymd)
+        SLTFile = os.path.join(self.ifile, ym, file_name)
+        h5File = h5py.File(SLTFile, 'r')
         lons = h5File.get('Longitude')[:]
         lats = h5File.get('Latitude')[:]
         lons = lons / 100.
@@ -154,20 +158,34 @@ class PROJ_COMM(object):
 
 
 def main(args):
-    if len(args) == 1:  # 跟参数，则处理输入的时段数据
-        in_proj_cfg = args[0]
-    else:
-        in_proj_cfg = None
-
-    if in_proj_cfg is None:
-        print 'input args error exit'
+    sat_sensor = args[0]
+    ymd = args[1]
+    # 配置文件
+    in_proj_cfg = "%s.yaml" % sat_sensor
+    if not os.path.isfile(in_proj_cfg):
+        print "config file error"
         sys.exit(-1)
     # 初始化投影公共类
-    proj = PROJ_COMM(in_proj_cfg)
+    proj = PROJ_COMM(in_proj_cfg, ymd)
     proj.proj_fy2_dcc()
 
 
 if __name__ == '__main__':
-    # 获取python输入参数，进行处理
+    # 获取程序参数接口
     args = sys.argv[1:]
-    main(args)
+    help_info = \
+        u'''
+            【参数1】：SAT+SENSOR
+            【参数2】：yyyymmdd
+        '''
+    if '-h' in args:
+        print help_info
+        sys.exit(-1)
+
+    if len(args) == 2:  # 跟参数，则处理输入的时段数据
+        args = sys.argv[1:]
+        main(args)
+
+    else:
+        print help_info
+        sys.exit(-1)
