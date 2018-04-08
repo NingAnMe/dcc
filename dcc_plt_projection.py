@@ -66,7 +66,15 @@ class PROJ_COMM(object):
 
     def proj_dcc(self):
         print("plot %s" % self.ymd)
-        # print 'start project %s %s' % (self.sat, self.sensor)
+
+        # 判断文件是否存在
+        file_name = '%s_DCC_SLT_%s.H5' % (self.sat_sensor, self.ymd)
+        ym = self.ymd[:6]
+        SLTFile = os.path.join(self.ifile, ym, file_name)
+        if not os.path.isfile(SLTFile):
+            print("file no exist : %s" % SLTFile)
+            return
+
         # 初始化投影参数   rowMax=None, colMax=None
         lookup_table = prj_gll(resLat=self.resLat,
                                resLon=self.resLon)
@@ -75,28 +83,23 @@ class PROJ_COMM(object):
         row = proj_data_num.shape[0]
         col = proj_data_num.shape[1]
 
-        ym = self.ymd[:6]
-        file_name = '%s_DCC_SLT_%s.H5' % (self.sat_sensor, self.ymd)
-        SLTFile = os.path.join(self.ifile, ym, file_name)
         h5File = h5py.File(SLTFile, 'r')
         lons = h5File.get('Longitude')[:]
         lats = h5File.get('Latitude')[:]
+        h5File.close()
         lons = lons / 100.
         lats = lats / 100.
-        h5File.close()
+
         ii, jj = lookup_table.lonslats2ij(lons, lats)
 
         for i in xrange(row):
             for j in xrange(col):
                 condition = np.logical_and(ii[:] == i, jj[:] == j)
                 idx = np.where(condition)
-                #          if len(idx[0]) > 0:
-                #             print len(idx[0])
                 proj_data_num[i][j] = proj_data_num[i][j] + len(idx[0])
-
         proj_data_num = np.ma.masked_where(proj_data_num == 0, proj_data_num)
-        p = dv_map.dv_map()
 
+        p = dv_map.dv_map()
         p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
                    ptype=None, markersize=20,
                    marker='s')
