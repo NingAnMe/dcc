@@ -1,5 +1,5 @@
 # coding: utf-8
-__author__ = 'liux'
+__author__ = 'liux, anning'
 
 '''
 FileName:     projection_dcc.py
@@ -37,14 +37,20 @@ class PROJ_COMM(object):
             cfg = yaml.load(stream)
         self.sat = cfg['INFO']['sat']
         self.sensor = cfg['INFO']['sensor']
-        # self.ymd = cfg['INFO']['ymd']
+        self.sat_sensor = "%s+%s" % (self.sat, self.sensor)
+
         self.ymd = ymd
 
         self.ifile = cfg['PATH']['ipath']  # SLT 数据文件
         self.ofile = cfg['PATH']['opath']
         self.ofile_txt = cfg['PATH']['opath_txt']
 
-        self.cmd = cfg['PROJ']['cmd']
+        self.nlat = None
+        self.slat = None
+        self.wlon = None
+        self.elon = None
+        self.resLat = None
+        self.resLon = None
         if cfg['PROJ']['nlat']:
             self.nlat = float(cfg['PROJ']['nlat'])
         if cfg['PROJ']['slat']:
@@ -58,21 +64,19 @@ class PROJ_COMM(object):
         if cfg['PROJ']['resLon']:
             self.resLon = float(cfg['PROJ']['resLon'])
 
-    def proj_fy2_dcc(self):
-        print self.ymd
+    def proj_dcc(self):
+        print("plot %s" % self.ymd)
         # print 'start project %s %s' % (self.sat, self.sensor)
         # 初始化投影参数   rowMax=None, colMax=None
-        lookup_table = prj_gll(nlat=self.nlat, slat=self.slat, wlon=self.wlon,
-                               elon=self.elon, resLat=self.resLat,
+        lookup_table = prj_gll(resLat=self.resLat,
                                resLon=self.resLon)
         newLats, newLons = lookup_table.generateLatsLons()
         proj_data_num = np.full_like(newLats, 0)
         row = proj_data_num.shape[0]
         col = proj_data_num.shape[1]
 
-        # for L1File in self.ifile:
         ym = self.ymd[:6]
-        file_name = '%s+%s_DCC_SLT_%s.H5' % (self.sat, self.sensor, self.ymd)
+        file_name = '%s_DCC_SLT_%s.H5' % (self.sat_sensor, self.ymd)
         SLTFile = os.path.join(self.ifile, ym, file_name)
         h5File = h5py.File(SLTFile, 'r')
         lons = h5File.get('Longitude')[:]
@@ -84,7 +88,7 @@ class PROJ_COMM(object):
 
         for i in xrange(row):
             for j in xrange(col):
-                condition = np.logical_and(ii[:, 0] == i, jj[:, 0] == j)
+                condition = np.logical_and(ii[:] == i, jj[:] == j)
                 idx = np.where(condition)
                 #          if len(idx[0]) > 0:
                 #             print len(idx[0])
@@ -94,22 +98,25 @@ class PROJ_COMM(object):
         p = dv_map.dv_map()
 
         p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
-                   box=[30., -30., 60., 120.], ptype=None, markersize=20,
+                   ptype=None, markersize=20,
                    marker='s')
-        title_name = '%s_dcc_projection_' % self.sat + str(self.ymd)
+        title_name = '%s_dcc_projection_' % self.sat_sensor + str(self.ymd)
         p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
 
-        opath_fig = self.ofile + '/%s' % self.ymd[:6]
+        opath_fig = os.path.join(self.ofile, '%s' % self.ymd[:6])
         if not os.path.exists(opath_fig):
-            os.mkdir(opath_fig)
+            os.makedirs(opath_fig)
 
-        fig_name = opath_fig + '/%s_%s_dcc.png' % (self.sat, self.ymd)
+        fig_name = os.path.join(opath_fig,
+                                '%s_%s_dcc.png' % (self.sat_sensor, self.ymd))
         p.savefig(fig_name)
-        opath_hdf = self.ofile + '/%s' % self.ymd[:6]
+
+        opath_hdf = os.path.join(self.ofile, '%s' % self.ymd[:6])
         if not os.path.exists(opath_hdf):
             os.mkdir(opath_hdf)
 
-        opath_hdf = opath_hdf + '/%s_%s_dcc.hdf' % (self.sat, self.ymd)
+        opath_hdf = os.path.join(opath_hdf,
+                                 '%s_%s_dcc.hdf' % (self.sat_sensor, self.ymd))
 
         h5file_W = h5py.File(opath_hdf, 'w')
         h5file_W.create_dataset('proj_data_nums', dtype='i2',
@@ -119,15 +126,17 @@ class PROJ_COMM(object):
 
         ###########################################
         # read hdf file and cont values
-        opath_txt = self.ofile_txt + '/%s_dcc_daily_count.txt' % self.sat
+        opath_txt = os.path.join(self.ofile_txt,
+                                 '%s_dcc_daily_count.txt' % self.sat_sensor)
         if len(self.ifile) == 1 and len(self.ymd) == 8:
+            print 'ssss'
             daily_hdf = h5py.File(opath_hdf)
             data_mat = daily_hdf.get("proj_data_nums", 'r')
             count_value = np.sum(data_mat)
             self.FileSave = '%8s\t%8s\n' % (self.ymd, count_value)
-            self.Write(opath_txt)
+            self.write_txt(opath_txt)
 
-    def Write(self, FileName):
+    def write_txt(self, FileName):
         allLines = []
         DICT_D = {}
         FilePath = os.path.dirname(FileName)
@@ -173,7 +182,7 @@ def main(args):
         sys.exit(-1)
     # 初始化投影公共类
     proj = PROJ_COMM(in_proj_cfg, ymd)
-    proj.proj_fy2_dcc()
+    proj.proj_dcc()
 
 
 if __name__ == '__main__':
