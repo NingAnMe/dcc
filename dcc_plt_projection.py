@@ -11,15 +11,20 @@ Input:
 Output:       (^_^)
 '''
 
-import h5py
 import os
 import sys
 import yaml
+import h5py
+
+from multiprocessing import Pool, Lock
+from dateutil.relativedelta import relativedelta
 
 import numpy as np
+from configobj import ConfigObj
 
 from DP.dp_prj import prj_gll
 from DV import dv_map
+from PB import pb_time
 from PB.pb_io import make_sure_path_exists
 
 
@@ -181,14 +186,10 @@ class PROJ_COMM(object):
             fp.close()
 
 
-def main(args):
-    sat_sensor = args[0]
-    ymd = args[1]
+def run(sat_sensor, ymd):
     # 配置文件
     in_proj_cfg = "%s.yaml" % sat_sensor
-    if not os.path.isfile(in_proj_cfg):
-        print "config file error"
-        sys.exit(-1)
+
     # 初始化投影公共类
     proj = PROJ_COMM(in_proj_cfg, ymd)
     proj.proj_dcc()
@@ -200,16 +201,51 @@ if __name__ == '__main__':
     help_info = \
         u'''
             【参数1】：SAT+SENSOR
-            【参数2】：yyyymmdd
+            【参数2】：yyyymmdd-yyyymmdd
         '''
     if '-h' in args:
         print help_info
         sys.exit(-1)
 
+    # 获取程序所在位置，拼接配置文件
+    MainPath, MainFile = os.path.split(os.path.realpath(__file__))
+    ProjPath = os.path.dirname(MainPath)
+    omPath = os.path.dirname(ProjPath)
+    dvPath = os.path.join(os.path.dirname(omPath), 'DV')
+    cfgFile = os.path.join(ProjPath, 'cfg', 'global_dcc.cfg')
+
+    # 配置不存在预警
+    if not os.path.isfile(cfgFile):
+        print(u'配置文件不存在 %s' % cfgFile)
+        sys.exit(-1)
+
+    # 读取全局配置
+    inCfg = ConfigObj(cfgFile)
+
+    # 开启进程池
+    threadNum = inCfg['CROND']['threads']
+    pool = Pool(processes=int(threadNum))
+
     if len(args) == 2:  # 跟参数，则处理输入的时段数据
-        args = sys.argv[1:]
-        main(args)
+        sat_sensor = args[0]
+        str_time = args[1]
+        date_s, date_e = pb_time.arg_str2date(str_time)
+
+        if len(str_time) == 17:
+            timeStep = relativedelta(days=1)
+        else:
+            print(help_info)
+            sys.exit(-1)
+
+        # 开启并行
+        while date_s <= date_e:
+            ymd = date_s.strftime('%Y%m%d')
+            pool.apply_async(run, (sat_sensor, ymd))
+            date_s = date_s + timeStep
+
+        pool.close()
+        pool.join()
 
     else:
-        print help_info
+        print(help_info)
         sys.exit(-1)
