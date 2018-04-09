@@ -15,6 +15,7 @@ import os
 import sys
 import yaml
 import h5py
+import calendar
 from datetime import datetime
 from multiprocessing import Pool, Lock
 from dateutil.relativedelta import relativedelta
@@ -28,20 +29,22 @@ from PB import pb_time
 from PB.pb_io import make_sure_path_exists
 
 
+lock = Lock()
+
+
 class PROJ_COMM(object):
 
-    def __init__(self, in_proj_cfg, ymd):
+    def __init__(self, in_proj_cfg, ymd, is_monthly):
         """
         读取yaml格式配置文件
         """
         if not os.path.isfile(in_proj_cfg):
             print 'Not Found %s' % in_proj_cfg
             sys.exit(-1)
+        cfg = ConfigObj(in_proj_cfg)
 
-        with open(in_proj_cfg, 'r') as stream:
-            cfg = yaml.load(stream)
-        self.sat = cfg['INFO']['sat']
-        self.sensor = cfg['INFO']['sensor']
+        self.sat = cfg['proj']['FY3D+MERSI']['sat']
+        self.sensor = cfg['proj']['FY3D+MERSI']['sensor']
         if self.sat and self.sensor:
             self.sat_sensor = "%s+%s" % (self.sat, self.sensor)
         else:
@@ -49,9 +52,11 @@ class PROJ_COMM(object):
 
         self.ymd = ymd
 
-        self.ifile = cfg['PATH']['ipath']  # SLT 数据文件
-        self.ofile = cfg['PATH']['opath']
-        self.ofile_txt = cfg['PATH']['opath_txt']
+        self.is_monthly = is_monthly
+
+        self.ifile = cfg['proj']['FY3D+MERSI']['ipath']  # SLT 数据文件
+        self.ofile = cfg['proj']['FY3D+MERSI']['opath']
+        self.ofile_txt = cfg['proj']['FY3D+MERSI']['opath_txt']
 
         self.nlat = None
         self.slat = None
@@ -59,29 +64,20 @@ class PROJ_COMM(object):
         self.elon = None
         self.resLat = None
         self.resLon = None
-        if cfg['PROJ']['nlat']:
-            self.nlat = float(cfg['PROJ']['nlat'])
-        if cfg['PROJ']['slat']:
-            self.slat = float(cfg['PROJ']['slat'])
-        if cfg['PROJ']['wlon']:
-            self.wlon = float(cfg['PROJ']['wlon'])
-        if cfg['PROJ']['elon']:
-            self.elon = float(cfg['PROJ']['elon'])
-        if cfg['PROJ']['resLat']:
-            self.resLat = float(cfg['PROJ']['resLat'])
-        if cfg['PROJ']['resLon']:
-            self.resLon = float(cfg['PROJ']['resLon'])
+        if cfg['proj']['FY3D+MERSI']['nlat']:
+            self.nlat = float(cfg['proj']['FY3D+MERSI']['nlat'])
+        if cfg['proj']['FY3D+MERSI']['slat']:
+            self.slat = float(cfg['proj']['FY3D+MERSI']['slat'])
+        if cfg['proj']['FY3D+MERSI']['wlon']:
+            self.wlon = float(cfg['proj']['FY3D+MERSI']['wlon'])
+        if cfg['proj']['FY3D+MERSI']['elon']:
+            self.elon = float(cfg['proj']['FY3D+MERSI']['elon'])
+        if cfg['proj']['FY3D+MERSI']['resLat']:
+            self.resLat = float(cfg['proj']['FY3D+MERSI']['resLat'])
+        if cfg['proj']['FY3D+MERSI']['resLon']:
+            self.resLon = float(cfg['proj']['FY3D+MERSI']['resLon'])
 
     def proj_dcc(self):
-        print("plot %s" % self.ymd)
-
-        # 判断文件是否存在
-        file_name = '%s_DCC_SLT_%s.H5' % (self.sat_sensor, self.ymd)
-        ym = self.ymd[:6]
-        SLTFile = os.path.join(self.ifile, ym, file_name)
-        if not os.path.isfile(SLTFile):
-            print("file no exist : %s" % SLTFile)
-            return
 
         # 初始化投影参数   rowMax=None, colMax=None
         lookup_table = prj_gll(resLat=self.resLat,
@@ -91,67 +87,146 @@ class PROJ_COMM(object):
         row = proj_data_num.shape[0]
         col = proj_data_num.shape[1]
 
-        h5File = h5py.File(SLTFile, 'r')
-        lons = h5File.get('Longitude')[:]
-        lats = h5File.get('Latitude')[:]
-        h5File.close()
-        lons = lons / 100.
-        lats = lats / 100.
+        if self.is_monthly:  # 如果是月的，需要查找当前自然月所有数据
+            PERIOD = calendar.monthrange(int(self.ymd[:4]),
+                                         int(self.ymd[4:6]))[1]  # 当前月份天数
+            _ymd = self.ymd[:6] + '%02d' % PERIOD  # 当月最后一天
+        else:
+            PERIOD = 1
+            _ymd = self.ymd
+        
+        file_list = []
+        for daydelta in xrange(PERIOD):
+            cur_ymd = pb_time.ymd_plus(_ymd, -daydelta)
+            # 判断文件是否存在
+            file_name = '%s_DCC_SLT_%s.H5' % (self.sat_sensor, cur_ymd)
+            ym = self.ymd[:6]
+            HDF_file = os.path.join(self.ifile, ym, file_name)
+            if not os.path.isfile(HDF_file):
+                print("file no exist : %s" % HDF_file)
+            else:
+                file_list.append(HDF_file)
 
-        ii, jj = lookup_table.lonslats2ij(lons, lats)
+        if len(file_list) == 0:
+            return
 
-        for i in xrange(row):
-            for j in xrange(col):
-                condition = np.logical_and(ii[:] == i, jj[:] == j)
-                idx = np.where(condition)
-                proj_data_num[i][j] = proj_data_num[i][j] + len(idx[0])
+        # 开始进行投影
+        for HDF_file in file_list:
+            h5File = h5py.File(HDF_file, 'r')
+            lons = h5File.get('Longitude')[:]
+            lats = h5File.get('Latitude')[:]
+            h5File.close()
+            lons = lons / 100.
+            lats = lats / 100.
+
+            ii, jj = lookup_table.lonslats2ij(lons, lats)
+
+            for i in xrange(row):
+                for j in xrange(col):
+                    condition = np.logical_and(ii[:] == i, jj[:] == j)
+                    idx = np.where(condition)
+                    proj_data_num[i][j] = proj_data_num[i][j] + len(idx[0])
         proj_data_num = np.ma.masked_where(proj_data_num == 0, proj_data_num)
 
-        p = dv_map.dv_map()
-        p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
-                   ptype=None, markersize=20,
-                   marker='s')
-        title_name = '%s_dcc_projection_' % self.sat_sensor + str(self.ymd)
-        p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
+        if self.is_monthly:
+            print("plot: %s" % self.ymd[0:6])
+            p = dv_map.dv_map()
+            p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
+                       ptype=None, markersize=20,
+                       marker='s')
+            title_name = '%s_dcc_projection_' % self.sat_sensor + str(self.ymd[0:6])
+            p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
 
-        opath_fig = os.path.join(self.ofile, '%s' % self.ymd[:6])
-        if not os.path.exists(opath_fig):
-            os.makedirs(opath_fig)
+            opath_fig = os.path.join(self.ofile, 'Monthly', '%s' % self.ymd[:6])
+            if not os.path.exists(opath_fig):
+                os.makedirs(opath_fig)
 
-        fig_name = os.path.join(opath_fig,
-                                '%s_%s_dcc.png' % (self.sat_sensor, self.ymd))
-        p.savefig(fig_name)
+            fig_name = os.path.join(opath_fig,
+                                    '%s_%s_dcc_monthly.png' % (self.sat_sensor,
+                                                               self.ymd[:6]))
+            p.savefig(fig_name)
 
-        opath_hdf = os.path.join(self.ofile, '%s' % self.ymd[:6])
-        if not os.path.exists(opath_hdf):
-            os.mkdir(opath_hdf)
+            opath_hdf = os.path.join(self.ofile, 'Monthly', '%s' % self.ymd[:6])
+            if not os.path.exists(opath_hdf):
+                os.mkdir(opath_hdf)
 
-        opath_hdf = os.path.join(opath_hdf,
-                                 '%s_%s_dcc.hdf' % (self.sat_sensor, self.ymd))
+            opath_hdf = os.path.join(opath_hdf,
+                                     '%s_%s_dcc_monthly.hdf' % (self.sat_sensor,
+                                                                self.ymd[0:6]))
 
-        h5file_W = h5py.File(opath_hdf, 'w')
-        h5file_W.create_dataset('proj_data_nums', dtype='i2',
-                                data=proj_data_num, compression='gzip',
-                                compression_opts=5, shuffle=True)
-        h5file_W.close()
+            h5file_W = h5py.File(opath_hdf, 'w')
+            h5file_W.create_dataset('proj_data_nums', dtype='i2',
+                                    data=proj_data_num, compression='gzip',
+                                    compression_opts=5, shuffle=True)
+            h5file_W.close()
 
-        ###########################################
-        # read hdf file and cont values
-        print("write txt %s" % self.ymd)
-        if not os.path.exists(self.ofile_txt):
-            os.mkdir(self.ofile_txt)
-        opath_txt = os.path.join(self.ofile_txt,
-                                 '%s_dcc_daily_count.txt' % self.sat_sensor)
+            ###########################################
+            # read hdf file and cont values
+            print("write txt: %s" % self.ymd[0:6])
+            if not os.path.exists(self.ofile_txt):
+                os.mkdir(self.ofile_txt)
+            opath_txt = os.path.join(
+                self.ofile_txt, '%s_dcc_monthly_count.txt' % self.sat_sensor)
 
-        if self.ifile and len(self.ymd) == 8:
-            daily_hdf = h5py.File(opath_hdf)
-            data_mat = daily_hdf.get("proj_data_nums", 'r')
-            count_value = np.sum(data_mat)
-            self.FileSave = '%8s\t%8s\n' % (self.ymd, count_value)
+            if self.ifile and len(self.ymd) == 8:
+                hdf = h5py.File(opath_hdf, 'r')
+                data_mat = hdf.get("proj_data_nums")[:]
+                hdf.close()
+                count_value = np.sum(data_mat)
+                self.FileSave = '%8s\t%8s\n' % (self.ymd[0:6], count_value)
 
-            lock.acquire()
-            self.write_txt(opath_txt)
-            lock.release()
+                lock.acquire()
+                self.write_txt(opath_txt)
+                lock.release()
+        else:
+            print("plot: %s" % self.ymd)
+            p = dv_map.dv_map()
+            p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
+                       ptype=None, markersize=20,
+                       marker='s')
+            title_name = '%s_dcc_projection_' % self.sat_sensor + str(self.ymd)
+            p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
+
+            opath_fig = os.path.join(self.ofile, 'Daily', '%s' % self.ymd)
+            if not os.path.exists(opath_fig):
+                os.makedirs(opath_fig)
+
+            fig_name = os.path.join(opath_fig,
+                                    '%s_%s_dcc_daily.png' % (self.sat_sensor,
+                                                             self.ymd))
+            p.savefig(fig_name)
+
+            opath_hdf = os.path.join(self.ofile, 'Daily', '%s' % self.ymd)
+            if not os.path.exists(opath_hdf):
+                os.mkdir(opath_hdf)
+
+            opath_hdf = os.path.join(opath_hdf,
+                                     '%s_%s_dcc_daily.hdf' % (self.sat_sensor,
+                                                              self.ymd))
+
+            h5file_W = h5py.File(opath_hdf, 'w')
+            h5file_W.create_dataset('proj_data_nums', dtype='i2',
+                                    data=proj_data_num, compression='gzip',
+                                    compression_opts=5, shuffle=True)
+            h5file_W.close()
+
+            ###########################################
+            # read hdf file and cont values
+            print("write txt: %s" % self.ymd)
+            if not os.path.exists(self.ofile_txt):
+                os.mkdir(self.ofile_txt)
+            opath_txt = os.path.join(
+                self.ofile_txt, '%s_dcc_daily_count.txt' % self.sat_sensor)
+
+            if self.ifile and len(self.ymd) == 8:
+                hdf = h5py.File(opath_hdf, 'r')
+                data_mat = hdf.get("proj_data_nums")[:]
+                count_value = np.sum(data_mat)
+                self.FileSave = '%8s\t%8s\n' % (self.ymd, count_value)
+
+                lock.acquire()
+                self.write_txt(opath_txt)
+                lock.release()
 
     def write_txt(self, FileName):
         allLines = []
@@ -189,13 +264,15 @@ class PROJ_COMM(object):
             fp.close()
 
 
-def run(sat_sensor, ymd):
+def run(sat_sensor, ymd, is_monthly):
     # 配置文件
-    in_proj_cfg = "%s.yaml" % sat_sensor
+    in_proj_cfg = "global_dcc.cfg"
 
     # 初始化投影公共类
-    proj = PROJ_COMM(in_proj_cfg, ymd)
+    print('start: %s' % ymd)
+    proj = PROJ_COMM(in_proj_cfg, ymd, is_monthly)
     proj.proj_dcc()
+    print('success: %s' % ymd)
 
 
 if __name__ == '__main__':
@@ -204,10 +281,10 @@ if __name__ == '__main__':
     help_info = \
         u'''
             【参数1】：SAT+SENSOR
-            【参数2】：yyyymmdd-yyyymmdd
+            【参数2】：yyyymmdd-yyyymmdd or yyyymm-yyyymm
         '''
     if '-h' in args:
-        print help_info
+        print(help_info)
         sys.exit(-1)
 
     # 获取程序所在位置，拼接配置文件
@@ -226,7 +303,6 @@ if __name__ == '__main__':
     inCfg = ConfigObj(cfgFile)
     threadNum = inCfg['CROND']['threads']  # 线程数量
 
-
     # 开启进程池
     pool = Pool(processes=int(threadNum))
 
@@ -237,15 +313,18 @@ if __name__ == '__main__':
 
         if len(str_time) == 17:
             timeStep = relativedelta(days=1)
+            is_monthly = False
+        elif len(str_time) == 13:
+            timeStep = relativedelta(months=1)
+            is_monthly = True
         else:
             print(help_info)
             sys.exit(-1)
 
         # 开启并行
-        lock = Lock()
         while date_s <= date_e:
             ymd = date_s.strftime('%Y%m%d')
-            pool.apply_async(run, (sat_sensor, ymd))
+            pool.apply_async(run, (sat_sensor, ymd, is_monthly))
             date_s = date_s + timeStep
 
         pool.close()
@@ -266,7 +345,6 @@ if __name__ == '__main__':
             sys.exit(-1)
 
         # 开启并行
-        lock = Lock()
         while date_s <= date_e:
             ymd = date_s.strftime('%Y%m%d')
             pool.apply_async(run, (sat_sensor, ymd))
