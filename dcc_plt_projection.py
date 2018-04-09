@@ -212,7 +212,7 @@ if __name__ == '__main__':
     ProjPath = os.path.dirname(MainPath)
     omPath = os.path.dirname(ProjPath)
     dvPath = os.path.join(os.path.dirname(omPath), 'DV')
-    cfgFile = os.path.join(ProjPath, 'cfg', 'global_dcc.cfg')
+    cfgFile = os.path.join(ProjPath, 'dcc', 'global_dcc.cfg')
 
     # 配置不存在预警
     if not os.path.isfile(cfgFile):
