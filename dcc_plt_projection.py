@@ -148,7 +148,10 @@ class PROJ_COMM(object):
             data_mat = daily_hdf.get("proj_data_nums", 'r')
             count_value = np.sum(data_mat)
             self.FileSave = '%8s\t%8s\n' % (self.ymd, count_value)
+
+            lock.acquire()
             self.write_txt(opath_txt)
+            lock.release()
 
     def write_txt(self, FileName):
         allLines = []
@@ -238,6 +241,7 @@ if __name__ == '__main__':
             sys.exit(-1)
 
         # 开启并行
+        lock = Lock()
         while date_s <= date_e:
             ymd = date_s.strftime('%Y%m%d')
             pool.apply_async(run, (sat_sensor, ymd))
