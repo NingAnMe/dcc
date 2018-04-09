@@ -1,19 +1,9 @@
 # coding: utf-8
-__author__ = 'liux, anning'
-
-'''
-FileName:     projection_dcc.py
-Description:  日月投影分布图
-Author:       wangpeng
-Date:         2015-08-21
-version:      1.0.0.050821_beat
-Input:        
-Output:       (^_^)
-'''
+__author__ = 'anning'
+__date__ = '2018-04-09'
 
 import os
 import sys
-import yaml
 import h5py
 import calendar
 from datetime import datetime
@@ -26,15 +16,13 @@ from configobj import ConfigObj
 from DP.dp_prj import prj_gll
 from DV import dv_map
 from PB import pb_time
-from PB.pb_io import make_sure_path_exists
-
 
 lock = Lock()
 
 
-class PROJ_COMM(object):
+class ProjComm(object):
 
-    def __init__(self, in_proj_cfg, ymd, is_monthly):
+    def __init__(self, in_proj_cfg, ymd_str, is_monthly_boole):
         """
         读取yaml格式配置文件
         """
@@ -45,14 +33,16 @@ class PROJ_COMM(object):
 
         self.sat = cfg['proj']['FY3D+MERSI']['sat']
         self.sensor = cfg['proj']['FY3D+MERSI']['sensor']
+
         if self.sat and self.sensor:
             self.sat_sensor = "%s+%s" % (self.sat, self.sensor)
         else:
             self.sat_sensor = self.sat
 
-        self.ymd = ymd
+        self.ymd = ymd_str
+        self.is_monthly = is_monthly_boole
 
-        self.is_monthly = is_monthly
+        self.data_count = ''
 
         self.ifile = cfg['proj']['FY3D+MERSI']['ipath']  # SLT 数据文件
         self.ofile = cfg['proj']['FY3D+MERSI']['opath']
@@ -94,7 +84,7 @@ class PROJ_COMM(object):
         else:
             PERIOD = 1
             _ymd = self.ymd
-        
+
         file_list = []
         for daydelta in xrange(PERIOD):
             cur_ymd = pb_time.ymd_plus(_ymd, -daydelta)
@@ -134,7 +124,8 @@ class PROJ_COMM(object):
             p.easyplot(newLats, newLons, proj_data_num, vmin=0, vmax=10000,
                        ptype=None, markersize=20,
                        marker='s')
-            title_name = '%s_dcc_projection_' % self.sat_sensor + str(self.ymd[0:6])
+            title_name = '%s_dcc_projection_' % self.sat_sensor + str(
+                self.ymd[0:6])
             p.title = u'dcc： ' + str(title_name) + u' (分辨率1度)'
 
             opath_fig = os.path.join(self.ofile, 'Monthly', '%s' % self.ymd[:6])
@@ -173,7 +164,7 @@ class PROJ_COMM(object):
                 data_mat = hdf.get("proj_data_nums")[:]
                 hdf.close()
                 count_value = np.sum(data_mat)
-                self.FileSave = '%8s\t%8s\n' % (self.ymd[0:6], count_value)
+                self.data_count = '%8s\t%8s\n' % (self.ymd[0:6], count_value)
 
                 lock.acquire()
                 self.write_txt(opath_txt)
@@ -222,7 +213,7 @@ class PROJ_COMM(object):
                 hdf = h5py.File(opath_hdf, 'r')
                 data_mat = hdf.get("proj_data_nums")[:]
                 count_value = np.sum(data_mat)
-                self.FileSave = '%8s\t%8s\n' % (self.ymd, count_value)
+                self.data_count = '%8s\t%8s\n' % (self.ymd, count_value)
 
                 lock.acquire()
                 self.write_txt(opath_txt)
@@ -245,7 +236,7 @@ class PROJ_COMM(object):
             for Line in Lines:
                 DICT_D[Line[:8]] = Line[8:]
             # 添加或更改数据
-            Line = self.FileSave
+            Line = self.data_count
             DICT_D[Line[:8]] = Line[8:]
             # 按照时间排序
 
@@ -260,19 +251,19 @@ class PROJ_COMM(object):
         else:
             fp = open(FileName, 'w')
             fp.write(Title)
-            fp.writelines(self.FileSave)
+            fp.writelines(self.data_count)
             fp.close()
 
 
-def run(config, ymd, is_monthly):
+def run(config, run_ymd, monthly):
     # 配置文件
     in_proj_cfg = config
 
     # 初始化投影公共类
-    print('start: %s' % ymd)
-    proj = PROJ_COMM(in_proj_cfg, ymd, is_monthly)
+    print('start: %s' % run_ymd)
+    proj = ProjComm(in_proj_cfg, run_ymd, monthly)
     proj.proj_dcc()
-    print('success: %s' % ymd)
+    print('success: %s' % run_ymd)
 
 
 if __name__ == '__main__':
