@@ -15,7 +15,7 @@ import os
 import sys
 import yaml
 import h5py
-
+from datetime import datetime
 from multiprocessing import Pool, Lock
 from dateutil.relativedelta import relativedelta
 
@@ -224,14 +224,39 @@ if __name__ == '__main__':
 
     # 读取全局配置
     inCfg = ConfigObj(cfgFile)
+    threadNum = inCfg['CROND']['threads']  # 线程数量
+
 
     # 开启进程池
-    threadNum = inCfg['CROND']['threads']
     pool = Pool(processes=int(threadNum))
 
     if len(args) == 2:  # 跟参数，则处理输入的时段数据
         sat_sensor = args[0]
         str_time = args[1]
+        date_s, date_e = pb_time.arg_str2date(str_time)
+
+        if len(str_time) == 17:
+            timeStep = relativedelta(days=1)
+        else:
+            print(help_info)
+            sys.exit(-1)
+
+        # 开启并行
+        lock = Lock()
+        while date_s <= date_e:
+            ymd = date_s.strftime('%Y%m%d')
+            pool.apply_async(run, (sat_sensor, ymd))
+            date_s = date_s + timeStep
+
+        pool.close()
+        pool.join()
+
+    elif len(args) == 1:  # 跟参数，则处理输入的时段数据
+        sat_sensor = args[0]
+        lanch_date = inCfg['plt'][sat_sensor]['lanch_date']  # 第一天数据时间
+        today = datetime.utcnow().strftime('%Y%m%d')  # 现在时间
+        str_time = '%s-%s' % (lanch_date, today)
+
         date_s, date_e = pb_time.arg_str2date(str_time)
 
         if len(str_time) == 17:
