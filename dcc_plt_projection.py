@@ -264,9 +264,9 @@ class PROJ_COMM(object):
             fp.close()
 
 
-def run(sat_sensor, ymd, is_monthly):
+def run(config, ymd, is_monthly):
     # 配置文件
-    in_proj_cfg = "global_dcc.cfg"
+    in_proj_cfg = config
 
     # 初始化投影公共类
     print('start: %s' % ymd)
@@ -324,7 +324,7 @@ if __name__ == '__main__':
         # 开启并行
         while date_s <= date_e:
             ymd = date_s.strftime('%Y%m%d')
-            pool.apply_async(run, (sat_sensor, ymd, is_monthly))
+            pool.apply_async(run, (cfgFile, ymd, is_monthly))
             date_s = date_s + timeStep
 
         pool.close()
