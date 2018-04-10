@@ -185,8 +185,9 @@ def run(rollday):
             OutFile = os.path.join(opath, rollday, FileName)
             ##### 4、写入文件
             DccDataWrite(Title, lines, OutFile)
-
+            print OutFile
         idx = idx + 1
+    print 'success:', rollday
 
 
 ########################### 主程序入口 ############################
