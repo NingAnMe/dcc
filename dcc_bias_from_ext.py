@@ -10,8 +10,6 @@ import sys
 import numpy as np
 from configobj import ConfigObj
 
-from PB import pb_time
-
 
 def DccDataRead(iFile):
     """
@@ -43,7 +41,7 @@ def DccDataWrite(title, data, outFile):
     """
     title: 标题
     data： 数据体
-    outFile:输出文件
+    outFile: 输出文件
     """
 
     alllines = []
@@ -70,14 +68,125 @@ def DccDataWrite(title, data, outFile):
         for i in xrange(len(newlines)):
             alllines.append(str(newlines[i][0]) + str(newlines[i][1]))
         fp = open(outFile, 'w')
-        fp.write(Title)
+        fp.write(title)
         fp.writelines(alllines)
         fp.close()
     else:
         fp = open(outFile, 'w')
-        fp.write(Title)
+        fp.write(title)
         fp.writelines(data)
         fp.close()
+
+
+def run(rollday):
+
+    rollday = rollday
+
+    ipath1 = inCfg['bias'][satFlag]['ipath1']
+    ipath2 = inCfg['bias'][satFlag]['ipath2']
+    opath = inCfg['bias'][satFlag]['opath']
+    chan1 = inCfg['bias'][satFlag]['chan1']
+    chan2 = inCfg['bias'][satFlag]['chan2']
+    var = inCfg['bias'][satFlag]['var']
+    if 'slope' in inCfg['bias'][satFlag]:
+        slope = inCfg['bias'][satFlag]['slope']
+        slope = map(float, slope)
+    if 'intercept' in inCfg['bias'][satFlag]:
+        intercept = inCfg['bias'][satFlag]['intercept']
+        intercept = map(float, intercept)
+
+    sat1, sat2 = satFlag.split('_')
+
+    idx = 0
+    for ch1, ch2 in zip(chan1, chan2):
+        if not isinstance(var, list):
+            var = [var]
+        for each in var:
+            FileName1 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+                sat1, each, ch1, rollday)
+            if sat2 == 'STANDARD':
+                FileName2 = 'DCC_%s_%s_STANDARD.txt' % (
+                    sat1, each)
+            else:
+                FileName2 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+                    sat2, each, ch2, rollday)
+
+            DccFile1 = os.path.join(ipath1, rollday, FileName1)
+            DccFile2 = os.path.join(ipath2, rollday, FileName2)
+            ary1 = DccDataRead(DccFile1)
+            ary2 = DccDataRead(DccFile2)
+            #                 a = list(ary1['ymd'])
+            #                 b = list(ary2['ymd'])
+
+            ##### 3、拼接文件头和数据体信息
+            Title = ('%-15s' * 8 + '\n') % (
+                'date', 'biasAvg', 'biasMed', 'biasMod', 'dccFiles',
+                'dccPoint', 'dccPrecent', 'dccDim')
+            lines = []
+
+            if sat2 == 'STANDARD':
+                dates = ary1['ymd']
+                for ymd in dates:
+                    idx1 = np.where(ymd == ary1['ymd'])
+                    avg1 = ary1['Avg'][idx1]
+                    med1 = ary1['Med'][idx1]
+                    mod1 = ary1['Mod'][idx1]
+
+                    idx2 = np.where(ch2 == ary2['chan'])
+                    avg2 = ary2['Avg'][idx2] * 100
+                    med2 = ary2['Med'][idx2] * 100
+                    mod2 = ary2['Mod'][idx2] * 100
+
+                    bias_avg = ((avg1 - avg2) / avg2) * 100.
+                    bias_med = ((med1 - med2) / avg2) * 100.
+                    bias_mod = ((mod1 - mod2) / avg2) * 100.
+                    Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % \
+                           (
+                               ymd, bias_avg, bias_med, bias_mod,
+                               int(ary1['dccFiles'][idx1]),
+                               int(ary1['dccPoint'][idx1]),
+                               int(ary1['dccPrecent'][idx1]),
+                               int(ary1['dccDim'][idx1]))
+                    lines.append(Data)
+
+            else:
+                # 获取时间交集
+                a = ary1['ymd']
+                b = ary2['ymd']
+                intersection = list(set(a) & set(b))
+                for ymd in sorted(intersection):
+                    idx1 = np.where(ymd == ary1['ymd'])
+                    idx2 = np.where(ymd == ary2['ymd'])
+
+                    avg1 = ary1['Avg'][idx1]
+                    med1 = ary1['Med'][idx1]
+                    mod1 = ary1['Mod'][idx1]
+
+                    avg2 = ary2['Avg'][idx2] * slope[idx] + intercept[idx]
+                    med2 = ary2['Med'][idx2] * slope[idx] + intercept[idx]
+                    mod2 = ary2['Mod'][idx2] * slope[idx] + intercept[idx]
+
+                    # 计算相对偏差 Bias = (SAT1的反射率 - 基准反射率) / 基准反射率 * 100%
+                    bias_avg = ((avg1 - avg2) / avg2) * 100.
+                    bias_med = ((med1 - med2) / avg2) * 100.
+                    bias_mod = ((mod1 - mod2) / avg2) * 100.
+
+                    Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % \
+                           (
+                               ymd, bias_avg, bias_med, bias_mod,
+                               ary1['dccFiles'][idx1],
+                               ary1['dccPoint'][idx1],
+                               ary1['dccPrecent'][idx1],
+                               ary1['dccDim'][idx1])
+                    lines.append(Data)
+
+            FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+                satFlag, each, ch1, rollday)
+            OutFile = os.path.join(opath, rollday, FileName)
+            ##### 4、写入文件
+            DccDataWrite(Title, lines, OutFile)
+
+        idx = idx + 1
 
 
 ########################### 主程序入口 ############################
@@ -107,119 +216,12 @@ if __name__ == '__main__':
     if len(args) == 2:  # 需要跟俩个参数执行
         satFlag = args[0]
         str_time = args[1]
-        date_s, date_e = pb_time.arg_str2date(str_time)
 
-        #         # 卫星标识检查，配置中没有则不处理
-        #         if satFlag not in inCfg.keys():
-        #             print 'not support satellite: %s' % satFlag
-        #             sys.exit(-1)
-
-        ipath1 = inCfg['bias'][satFlag]['ipath1']
-        ipath2 = inCfg['bias'][satFlag]['ipath2']
-        opath = inCfg['bias'][satFlag]['opath']
-        chan1 = inCfg['bias'][satFlag]['chan1']
-        chan2 = inCfg['bias'][satFlag]['chan2']
-        var = inCfg['bias'][satFlag]['var']
-        rollday = inCfg['bias'][satFlag]['rollday']
-        if 'slope' in inCfg['bias'][satFlag]:
-            slope = inCfg['bias'][satFlag]['slope']
-            slope = map(float, slope)
-        if 'intercept' in inCfg['bias'][satFlag]:
-            intercept = inCfg['bias'][satFlag]['intercept']
-            intercept = map(float, intercept)
-
-        sat1, sat2 = satFlag.split('_')
-
-        idx = 0
-        for ch1, ch2 in zip(chan1, chan2):
-            if not isinstance(var, list):
-                var = [var]
-            for each in var:
-                FileName1 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
-                    sat1, each, ch1, rollday)
-                if sat2 == 'STANDARD':
-                    FileName2 = 'DCC_%s_%s_STANDARD.txt' % (
-                        sat1, each)
-                else:
-                    FileName2 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
-                        sat2, each, ch2, rollday)
-                print(FileName1)
-                DccFile1 = os.path.join(ipath1, FileName1)
-                DccFile2 = os.path.join(ipath2, FileName2)
-                ary1 = DccDataRead(DccFile1)
-                ary2 = DccDataRead(DccFile2)
-                #                 a = list(ary1['ymd'])
-                #                 b = list(ary2['ymd'])
-
-                ##### 3、拼接文件头和数据体信息
-                Title = ('%-15s' * 8 + '\n') % (
-                    'date', 'biasAvg', 'biasMed', 'biasMod', 'dccFiles',
-                    'dccPoint', 'dccPrecent', 'dccDim')
-                lines = []
-
-                if sat2 == 'STANDARD':
-                    dates = ary1['ymd']
-                    for ymd in dates:
-                        idx1 = np.where(ymd == ary1['ymd'])
-                        avg1 = ary1['Avg'][idx1]
-                        med1 = ary1['Med'][idx1]
-                        mod1 = ary1['Mod'][idx1]
-
-                        idx2 = np.where(ch2 == ary2['chan'])
-                        avg2 = ary2['Avg'][idx2] * 100
-                        med2 = ary2['Med'][idx2] * 100
-                        mod2 = ary2['Mod'][idx2] * 100
-
-                        bias_avg = ((avg1 - avg2) / avg2) * 100.
-                        bias_med = ((med1 - med2) / avg2) * 100.
-                        bias_mod = ((mod1 - mod2) / avg2) * 100.
-                        Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % \
-                               (
-                                   ymd, bias_avg, bias_med, bias_mod,
-                                   int(ary1['dccFiles'][idx1]),
-                                   int(ary1['dccPoint'][idx1]),
-                                   int(ary1['dccPrecent'][idx1]),
-                                   int(ary1['dccDim'][idx1]))
-                        lines.append(Data)
-
-                else:
-                    # 获取时间交集
-                    a = ary1['ymd']
-                    b = ary2['ymd']
-                    intersection = list(set(a) & set(b))
-                    for ymd in sorted(intersection):
-                        idx1 = np.where(ymd == ary1['ymd'])
-                        idx2 = np.where(ymd == ary2['ymd'])
-
-                        avg1 = ary1['Avg'][idx1]
-                        med1 = ary1['Med'][idx1]
-                        mod1 = ary1['Mod'][idx1]
-
-                        avg2 = ary2['Avg'][idx2] * slope[idx] + intercept[idx]
-                        med2 = ary2['Med'][idx2] * slope[idx] + intercept[idx]
-                        mod2 = ary2['Mod'][idx2] * slope[idx] + intercept[idx]
-
-                        # 计算相对偏差 Bias = (SAT1的反射率 - 基准反射率) / 基准反射率 * 100%
-                        bias_avg = ((avg1 - avg2) / avg2) * 100.
-                        bias_med = ((med1 - med2) / avg2) * 100.
-                        bias_mod = ((mod1 - mod2) / avg2) * 100.
-
-                        Data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % \
-                               (
-                                   ymd, bias_avg, bias_med, bias_mod,
-                                   ary1['dccFiles'][idx1],
-                                   ary1['dccPoint'][idx1],
-                                   ary1['dccPrecent'][idx1],
-                                   ary1['dccDim'][idx1])
-                        lines.append(Data)
-
-                FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
-                    satFlag, each, ch1, rollday)
-                OutFile = os.path.join(opath, FileName)
-                ##### 4、写入文件
-                DccDataWrite(Title, lines, OutFile)
-
-            idx = idx + 1
+        roll_days = inCfg['bias'][satFlag]['rollday']
+        if isinstance(roll_days, str):
+            roll_days = [roll_days]
+        for num in roll_days:
+            run(num)
 
     else:  # 没有参数 输出帮助信息
         print help_info
