@@ -149,6 +149,103 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
     plt.close()
 
 
+def run(rollday):
+    try:
+        sat1, sat2 = satFlag.split('_')
+    except ValueError:
+        sat1 = satFlag
+        sat2 = None
+
+    rollday = rollday
+    ipath = inCfg['plt'][satFlag]['ipath']
+    opath = inCfg['plt'][satFlag]['opath']
+    lanch_date = inCfg['plt'][satFlag]['lanch_date']
+    var = inCfg['plt'][satFlag]['var']
+    band = inCfg['plt'][satFlag]['band']
+    ref_range = inCfg['plt'][satFlag]['REF_range']
+    dn_range = inCfg['plt'][satFlag]['DN_range']
+
+    # 拼接需要读取的文件
+    if not isinstance(var, list):
+        var = [var]
+    print(var)
+    for each in var:
+        for k, ch in enumerate(band):
+            print each, ch
+            FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+                satFlag, each, ch, rollday)
+            DccFile = os.path.join(ipath, FileName)
+            ######### 一、读取dcc提取后的标准文件 ##############
+            ary = DccDataRead(DccFile)
+
+            ######### 二、计算衰减  ##############
+            idx = np.where(ary['ymd'] == lanch_date)
+            FirstAvg = ary['Avg'][idx]
+            FirstMed = ary['Med'][idx]
+            FirstMod = ary['Mod'][idx]
+            # 如果是 DN，需要计算和发星第一天的相对百分比
+            if 'DN' in each:
+                AvgATT = (ary['Avg'] / FirstAvg) * 100
+                MedATT = (ary['Med'] / FirstMed) * 100
+                ModATT = (ary['Mod'] / FirstMod) * 100
+                print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
+                print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
+            elif 'REF' in each:
+                # 如果是绘制相对偏差，已经是计算好的相对百分比，不需要除100
+                # sat2 存在，代表是绘制两颗卫星的相对偏差
+                if sat2:
+                    AvgATT = ary['Avg']
+                    MedATT = ary['Med']
+                    ModATT = ary['Mod']
+                    print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
+                    print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
+                # 如果是绘制自身 REF 变化，需要除 100，还原 REF 真实值
+                else:
+                    AvgATT = ary['Avg'] / 100.
+                    MedATT = ary['Med'] / 100.
+                    ModATT = ary['Mod'] / 100.
+                    print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
+                    print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
+            datas = {
+                'AvgATT': AvgATT,
+                'MedATT': MedATT,
+                'ModATT': ModATT,
+            }
+
+            ######## 三、绘图   ###################
+            # 绘图 y 轴的数据范围
+            if each == 'REF':
+                y_range = ref_range
+            else:
+                y_range = dn_range
+
+            min_yaxis = int(y_range[k].split('_')[0])
+            max_yaxis = int(y_range[k].split('_')[1])
+
+            data_types = ['Avg', 'Med', 'Mod']
+            for data_type in data_types:
+                ymd_e = date_e.strftime('%Y%m%d')
+                outPng = os.path.join(
+                    opath, rollday, ymd_e,
+                    'DCC_%s_%s_%s_Rolldays_%s_Timeseries_%s.png' % (
+                        satFlag, each, ch, rollday, data_type))
+
+                date_D = []
+                for i in xrange(len(ary['ymd'])):
+                    dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
+                    date_D.append(dtime)
+                if sat2:
+                    title = '%s Minus %s %s TimeSeries' % (sat1, sat2, ch)
+                else:
+                    title = '%s %s TimeSeries' % (sat1, ch)
+                print title
+                data_name = '%sATT' % data_type
+                data_D = datas.get(data_name)
+                plot_bias(date_D, data_D, outPng, title, date_s, date_e,
+                          each, data_type, min_yaxis, max_yaxis)
+                print(outPng)
+
+
 ########################### 主程序入口 ############################
 if __name__ == '__main__':
     # 获取程序参数接口
@@ -179,90 +276,11 @@ if __name__ == '__main__':
         satFlag = args[0]
         str_time = args[1]
         date_s, date_e = pb_time.arg_str2date(str_time)
-
-        #         # 卫星标识检查，配置中没有则不处理
-        #         if satFlag not in inCfg.keys():
-        #             print 'not support satellite: %s' % satFlag
-        #             sys.exit(-1)
-        try:
-            sat1, sat2 = satFlag.split('_')
-        except ValueError:
-            sat1 = satFlag
-            sat2 = None
-
-        ipath = inCfg['plt'][satFlag]['ipath']
-        opath = inCfg['plt'][satFlag]['opath']
-        rollday = inCfg['plt'][satFlag]['rollday']
-        lanch_date = inCfg['plt'][satFlag]['lanch_date']
-        var = inCfg['plt'][satFlag]['var']
-        band = inCfg['plt'][satFlag]['band']
-        min_y = inCfg['plt'][satFlag]['min_y']
-        max_y = inCfg['plt'][satFlag]['max_y']
-
-        # 拼接需要读取的文件
-        if not isinstance(var, list):
-            var = [var]
-        print(var)
-        for each in var:
-            for k, ch in enumerate(band):
-                FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
-                    satFlag, each, ch, rollday)
-                DccFile = os.path.join(ipath, FileName)
-                ######### 一、读取dcc提取后的标准文件 ##############
-                ary = DccDataRead(DccFile)
-
-                ######### 二、计算衰减  ##############
-                idx = np.where(ary['ymd'] == lanch_date)
-                FirstAvg = ary['Avg'][idx]
-                FirstMed = ary['Med'][idx]
-                FirstMod = ary['Mod'][idx]
-                # 如果是 DN，需要计算和发星第一天的相对百分比
-                if 'DN' in each:
-                    AvgATT = (ary['Avg'] / FirstAvg) * 100
-                    MedATT = (ary['Med'] / FirstAvg) * 100
-                    ModATT = (ary['Mod'] / FirstAvg) * 100
-                elif 'REF' in each:
-                    # 如果是绘制相对偏差，已经是计算好的相对百分比，不需要除100
-                    # sat2 存在，代表是绘制两颗卫星的相对偏差
-                    if sat2:
-                        AvgATT = ary['Avg']
-                        MedATT = ary['Med']
-                        ModATT = ary['Mod']
-                    # 如果是绘制自身 REF 变化，需要除 100，还原 REF 真实值
-                    else:
-                        AvgATT = ary['Avg'] / 100.
-                        MedATT = ary['Med'] / 100.
-                        ModATT = ary['Mod'] / 100.
-                datas = {
-                    'AvgATT': AvgATT,
-                    'MedATT': MedATT,
-                    'ModATT': ModATT,
-                }
-
-                ######## 三、绘图   ###################
-                # 绘图 y 轴的数据范围
-                min_yaxis = int(min_y[k])
-                max_yaxis = int(max_y[k])
-                date_types = ['Avg', 'Med', 'Mod']
-                for date_type in date_types:
-                    outPng = os.path.join(opath,
-                                          'DCC_%s_%s_%s_Rolldays_%s_Timeseries_%s.png' % (
-                                           satFlag, each, ch, rollday, date_type))
-
-                    date_D = []
-                    for i in xrange(len(ary['ymd'])):
-                        dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
-                        date_D.append(dtime)
-                    if sat2:
-                        title = '%s Minus %s %s TimeSeries' % (sat1, sat2, ch)
-                    else:
-                        title = '%s %s TimeSeries' % (sat1, ch)
-                    print title
-                    data_name = '%sATT' % date_type
-                    data_D = datas.get(data_name)
-                    plot_bias(date_D, data_D, outPng, title, date_s, date_e,
-                              each, date_type, min_yaxis, max_yaxis)
-                    print(outPng)
+        roll_days = inCfg['plt'][satFlag]['rollday']
+        if isinstance(roll_days, str):
+            roll_days = [roll_days]
+        for num in roll_days:
+            run(num)
 
     else:  # 没有参数 输出帮助信息
         print help_info
