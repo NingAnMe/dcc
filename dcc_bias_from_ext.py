@@ -112,7 +112,7 @@ def run(rollday):
                     sat2, each, ch2, rollday)
 
             DccFile1 = os.path.join(ipath1, rollday, FileName1)
-            DccFile2 = os.path.join(ipath2, rollday, FileName2)
+            DccFile2 = os.path.join(ipath2, FileName2)
             ary1 = DccDataRead(DccFile1)
             ary2 = DccDataRead(DccFile2)
             #                 a = list(ary1['ymd'])
