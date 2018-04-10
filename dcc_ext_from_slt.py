@@ -284,11 +284,6 @@ if __name__ == '__main__':
         satFlag = args[0]
         str_time = args[1]
 
-        # 卫星标识检查，配置中没有则不处理
-        if satFlag not in inCfg['ext'].keys():
-            print 'not support satellite: %s' % satFlag
-            sys.exit(-1)
-
         roll_days = inCfg['ext'][satFlag]['rollday']
         if isinstance(roll_days, str):
             roll_days = [roll_days]
