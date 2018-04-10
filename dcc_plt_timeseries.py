@@ -176,7 +176,7 @@ def run(rollday):
             print each, ch
             FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
                 satFlag, each, ch, rollday)
-            DccFile = os.path.join(ipath, FileName)
+            DccFile = os.path.join(ipath, rollday, FileName)
             ######### 一、读取dcc提取后的标准文件 ##############
             ary = DccDataRead(DccFile)
 
@@ -243,8 +243,16 @@ def run(rollday):
                 print title
                 data_name = '%sATT' % data_type
                 data_D = datas.get(data_name)
+                if each == 'DN':
+                    name = 'Degradation'  # DN 的图像上面 ylabel 名字
+                elif each == 'REF':
+                    if sat2:
+                        name = 'Bias'  # Bias 的图像上面 ylabel 名字
+                    else:
+                        name = 'REF'  # REF 的图像上面 ylabel 名字
+
                 plot_bias(date_D, data_D, outPng, title, date_s, date_e,
-                          each, data_type, min_yaxis, max_yaxis)
+                          name, data_type, min_yaxis, max_yaxis)
                 print(outPng)
 
 
