@@ -165,6 +165,8 @@ def run(rollday):
     ref_range = inCfg['plt'][satFlag]['REF_range']
     dn_range = inCfg['plt'][satFlag]['DN_range']
 
+    date_s, date_e = pb_time.arg_str2date(str_time)
+
     # 拼接需要读取的文件
     if not isinstance(var, list):
         var = [var]
@@ -275,7 +277,7 @@ if __name__ == '__main__':
     if len(args) == 2:  # 需要跟俩个参数执行
         satFlag = args[0]
         str_time = args[1]
-        date_s, date_e = pb_time.arg_str2date(str_time)
+
         roll_days = inCfg['plt'][satFlag]['rollday']
         if isinstance(roll_days, str):
             roll_days = [roll_days]
