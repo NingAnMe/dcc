@@ -4,14 +4,17 @@ Created on 2017年9月21日
 
 @author: wangpeng
 """
+import re
 import os
 import sys
+from datetime import datetime
 
 import numpy as np
 from configobj import ConfigObj
+from dateutil.relativedelta import relativedelta
 
 
-def DccDataRead(iFile):
+def dcc_data_read(iFile):
     """
     加载 EXT 文件 或者 STANDARD 文件
     """
@@ -28,7 +31,7 @@ def DccDataRead(iFile):
                          dtype={'names': tuple(names1),
                                 'formats': tuple(formats1)},
                          skiprows=1, ndmin=1)
-    except Exception:
+    except IndexError:
         ary = np.loadtxt(iFile,
                          dtype={'names': tuple(names2),
                                 'formats': tuple(formats2)},
@@ -37,7 +40,24 @@ def DccDataRead(iFile):
     return ary
 
 
-def DccDataWrite(title, data, outFile):
+def get_file_list(dir_path, pattern=r'.*'):
+    """
+    查找目录下的所有符合匹配模式的文件的绝对路径，包括文件夹中的文件
+    :param dir_path: (str)目录路径
+    :param pattern: (str)匹配模式 'hdf'
+    :return: (list) 绝对路径列表
+    """
+    file_list = []
+    # 递归查找目录下所有文件
+    for root, dir_list, file_names in os.walk(dir_path):
+        for i in file_names:
+            m = re.match(pattern, i)
+            if m:
+                file_list.append(os.path.join(root, i))
+    return file_list
+
+
+def dcc_data_write(title, data, outFile):
     """
     title: 标题
     data： 数据体
@@ -78,6 +98,73 @@ def DccDataWrite(title, data, outFile):
         fp.close()
 
 
+def load_day_ext(ext_file):
+    """
+    读取日的 EXT 文件，返回 np.array
+    :param ext_file:
+    :return:
+    """
+    names = ('date', 'avg', 'med', 'mod',
+             'dcc_files', 'dcc_point', 'dcc_precent', 'dcc_dim')
+    formats = ('object', 'f4', 'f4', 'f4',
+               'i4', 'i4', 'i4', 'i4')
+
+    data = np.loadtxt(ext_file,
+                      converters={0: lambda x: datetime.strptime(x, "%Y%m%d")},
+                      dtype={'names': names,
+                             'formats': formats},
+                      skiprows=1, ndmin=1)
+    return data
+
+
+def month_average(day_data):
+    """
+    由 EXT 日数据生成 EXT 月平均数据
+    :param day_data: EXT 日数据
+    :return:
+    """
+    month_datas = []
+    ymd_s = day_data['date'][0]  # 第一天日期
+    ymd_e = day_data['date'][-1]  # 最后一天日期
+    date_s = ymd_s - relativedelta(days=(ymd_s.day - 1))  # 第一个月第一天日期
+
+    while date_s <= ymd_e:
+        # 当月最后一天日期
+        date_e = date_s + relativedelta(months=1) - relativedelta(days=1)
+
+        # 查找当月所有数据
+        day_date = day_data['date']
+        month_idx = np.where(np.logical_and(day_date >= date_s,
+                                            day_date <= date_e))
+
+        avg_month = day_data['avg'][month_idx]
+        med_month = day_data['med'][month_idx]
+        mod_month = day_data['mod'][month_idx]
+        dcc_files_month = day_data['dcc_files'][month_idx]
+        dcc_point_month = day_data['dcc_point'][month_idx]
+        dcc_precent_month = day_data['dcc_precent'][month_idx]
+        dcc_dim_month = day_data['dcc_dim'][month_idx]
+
+        ymd_data = date_s.strftime('%Y%m%d')
+        avg_data = avg_month.mean()
+        med_data = med_month.mean()
+        mod_data = mod_month.mean()
+        dcc_files_data = dcc_files_month.sum()
+        dcc_point_data = dcc_point_month.sum()
+        dcc_precent_data = dcc_precent_month[0]
+        dcc_dim_data = dcc_dim_month[0]
+
+        data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (
+            ymd_data, avg_data, med_data, mod_data,
+            dcc_files_data, dcc_point_data, dcc_precent_data, dcc_dim_data)
+
+        month_datas.append(data)
+
+        date_s = date_s + relativedelta(months=1)
+
+    return month_datas
+
+
 def run(rollday):
 
     rollday = rollday
@@ -97,24 +184,25 @@ def run(rollday):
 
     sat1, sat2 = satFlag.split('_')
 
+    # 处理日 Bias 数据
     idx = 0
     for ch1, ch2 in zip(chan1, chan2):
         if not isinstance(var, list):
             var = [var]
         for each in var:
-            FileName1 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+            FileName1 = 'DCC_%s_%s_%s_Rolldays_%s_ALL_Daily.txt' % (
                 sat1, each, ch1, rollday)
             if sat2 == 'STANDARD':
                 FileName2 = 'DCC_%s_%s_STANDARD.txt' % (
                     sat1, each)
             else:
-                FileName2 = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+                FileName2 = 'DCC_%s_%s_%s_Rolldays_%s_ALL_Daily.txt' % (
                     sat2, each, ch2, rollday)
 
             DccFile1 = os.path.join(ipath1, rollday, FileName1)
             DccFile2 = os.path.join(ipath2, FileName2)
-            ary1 = DccDataRead(DccFile1)
-            ary2 = DccDataRead(DccFile2)
+            ary1 = dcc_data_read(DccFile1)
+            ary2 = dcc_data_read(DccFile2)
             #                 a = list(ary1['ymd'])
             #                 b = list(ary2['ymd'])
 
@@ -180,14 +268,34 @@ def run(rollday):
                                ary1['dccDim'][idx1])
                     lines.append(Data)
 
-            FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+            FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL_Daily.txt' % (
                 satFlag, each, ch1, rollday)
             OutFile = os.path.join(opath, rollday, FileName)
             ##### 4、写入文件
-            DccDataWrite(Title, lines, OutFile)
+            dcc_data_write(Title, lines, OutFile)
             print OutFile
         idx = idx + 1
-    print 'success:', rollday
+    print 'success daily: %s' % rollday
+
+    # 处理月 Bias 数据
+    in_file = os.path.join(opath, rollday)
+    file_list = get_file_list(in_file, r'.*Daily')
+    for day_file in file_list:
+        out_file = day_file.replace('Daily', 'Monthly')
+        title = ('%-15s' * 8 + '\n') % (
+            'date', 'Avg', 'Med', 'Mod', 'dccFiles',
+            'dccPoint', 'dccPrecent', 'dccDim')
+
+        day_datas = load_day_ext(day_file)
+
+        month_data = month_average(day_datas)
+
+        with open(out_file, 'w') as f:
+            f.write(title)
+            f.writelines(month_data)
+            print out_file
+
+    print 'success monthly: %s' % rollday
 
 
 ########################### 主程序入口 ############################
