@@ -183,6 +183,73 @@ def get_file_list(dir_path, pattern=r'.*'):
     return file_list
 
 
+def load_day_ext(ext_file):
+    """
+    读取日的 EXT 文件，返回 np.array
+    :param ext_file:
+    :return:
+    """
+    names = ('date', 'avg', 'med', 'mod',
+             'dcc_files', 'dcc_point', 'dcc_precent', 'dcc_dim')
+    formats = ('object', 'f4', 'f4', 'f4',
+               'i4', 'i4', 'i4', 'i4')
+
+    data = np.loadtxt(ext_file,
+                      converters={0: lambda x: datetime.strptime(x, "%Y%m%d")},
+                      dtype={'names': names,
+                             'formats': formats},
+                      skiprows=1, ndmin=1)
+    return data
+
+
+def month_average(day_data):
+    """
+    由 EXT 日数据生成 EXT 月平均数据
+    :param day_data: EXT 日数据
+    :return:
+    """
+    month_datas = []
+    ymd_s = day_data['date'][0]  # 第一天日期
+    ymd_e = day_data['date'][-1]  # 最后一天日期
+    date_s = ymd_s - relativedelta(days=(ymd_s.day - 1))  # 第一个月第一天日期
+
+    while date_s <= ymd_e:
+        # 当月最后一天日期
+        date_e = date_s + relativedelta(months=1) - relativedelta(days=1)
+
+        # 查找当月所有数据
+        day_date = day_data['date']
+        month_idx = np.where(np.logical_and(day_date >= date_s,
+                                            day_date <= date_e))
+
+        avg_month = day_data['avg'][month_idx]
+        med_month = day_data['med'][month_idx]
+        mod_month = day_data['mod'][month_idx]
+        dcc_files_month = day_data['dcc_files'][month_idx]
+        dcc_point_month = day_data['dcc_point'][month_idx]
+        dcc_precent_month = day_data['dcc_precent'][month_idx]
+        dcc_dim_month = day_data['dcc_dim'][month_idx]
+
+        ymd_data = date_s.strftime('%Y%m%d')
+        avg_data = avg_month.mean()
+        med_data = med_month.mean()
+        mod_data = mod_month.mean()
+        dcc_files_data = dcc_files_month.sum()
+        dcc_point_data = dcc_point_month.sum()
+        dcc_precent_data = dcc_precent_month[0]
+        dcc_dim_data = dcc_dim_month[0]
+
+        data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (
+            ymd_data, avg_data, med_data, mod_data,
+            dcc_files_data, dcc_point_data, dcc_precent_data, dcc_dim_data)
+
+        month_datas.append(data)
+
+        date_s = date_s + relativedelta(months=1)
+
+    return month_datas
+
+
 def run(rollday):
     rollday = rollday
 
@@ -282,73 +349,6 @@ def run(rollday):
             f.write(title)
             f.writelines(month_data)
     print 'success Monthly: %s' % rollday
-
-
-def load_day_ext(ext_file):
-    """
-    读取日的 EXT 文件，返回 np.array
-    :param ext_file:
-    :return:
-    """
-    names = ('date', 'avg', 'med', 'mod',
-             'dcc_files', 'dcc_point', 'dcc_precent', 'dcc_dim')
-    formats = ('object', 'f4', 'f4', 'f4',
-               'i4', 'i4', 'i4', 'i4')
-
-    data = np.loadtxt(ext_file,
-                      converters={0: lambda x: datetime.strptime(x, "%Y%m%d")},
-                      dtype={'names': names,
-                             'formats': formats},
-                      skiprows=1, ndmin=1)
-    return data
-
-
-def month_average(day_data):
-    """
-    由 EXT 日数据生成 EXT 月平均数据
-    :param day_data: EXT 日数据
-    :return:
-    """
-    month_datas = []
-    ymd_s = day_data['date'][0]  # 第一天日期
-    ymd_e = day_data['date'][-1]  # 最后一天日期
-    date_s = ymd_s - relativedelta(days=(ymd_s.day - 1))  # 第一个月第一天日期
-
-    while date_s <= ymd_e:
-        # 当月最后一天日期
-        date_e = date_s + relativedelta(months=1) - relativedelta(days=1)
-
-        # 查找当月所有数据
-        day_date = day_data['date']
-        month_idx = np.where(np.logical_and(day_date >= date_s,
-                                            day_date <= date_e))
-
-        avg_month = day_data['avg'][month_idx]
-        med_month = day_data['med'][month_idx]
-        mod_month = day_data['mod'][month_idx]
-        dcc_files_month = day_data['dcc_files'][month_idx]
-        dcc_point_month = day_data['dcc_point'][month_idx]
-        dcc_precent_month = day_data['dcc_precent'][month_idx]
-        dcc_dim_month = day_data['dcc_dim'][month_idx]
-
-        ymd_data = date_s.strftime('%Y%m%d')
-        avg_data = avg_month.mean()
-        med_data = med_month.mean()
-        mod_data = mod_month.mean()
-        dcc_files_data = dcc_files_month.sum()
-        dcc_point_data = dcc_point_month.sum()
-        dcc_precent_data = dcc_precent_month[0]
-        dcc_dim_data = dcc_dim_month[0]
-
-        data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (
-            ymd_data, avg_data, med_data, mod_data,
-            dcc_files_data, dcc_point_data, dcc_precent_data, dcc_dim_data)
-
-        month_datas.append(data)
-
-        date_s = date_s + relativedelta(months=1)
-
-    return month_datas
 
 
 ########################### 主程序入口 ############################
