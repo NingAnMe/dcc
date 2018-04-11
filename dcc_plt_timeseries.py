@@ -10,7 +10,7 @@ from datetime import datetime
 from configobj import ConfigObj
 
 import numpy as np
-from matplotlib.ticker import MultipleLocator
+from matplotlib.ticker import MultipleLocator, MaxNLocator, LinearLocator, IndexLocator
 
 from PB import pb_time, pb_io
 from DV import dv_plt
@@ -113,12 +113,19 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
 
     plt.xlim(xlim_min, xlim_max)
     plt.ylim(ylim_min, ylim_max)
+
     ax = plt.gca()
     # format the ticks
-    interval = (ylim_max - ylim_min) // 8
+    interval = (ylim_max - ylim_min) / 8
     minibar = interval / 2.
     setXLocator(ax, xlim_min, xlim_max)
     set_tick_font(ax)
+
+    # 如果范围为浮点数，需要进行一次格式化，否则图像会少显示最后一个刻度
+    if isinstance(interval, float):
+        interval = float('%.5f' % interval)
+        minibar = float('%.5f' % minibar)
+
     ax.yaxis.set_major_locator(MultipleLocator(interval))
     ax.yaxis.set_minor_locator(MultipleLocator(minibar))
 
@@ -187,9 +194,9 @@ def run(rollday):
             FirstMod = ary['Mod'][idx]
             # 如果是 DN，需要计算和发星第一天的相对百分比
             if 'DN' in each:
-                AvgATT = (ary['Avg'] / FirstAvg) * 100
-                MedATT = (ary['Med'] / FirstMed) * 100
-                ModATT = (ary['Mod'] / FirstMod) * 100
+                AvgATT = (ary['Avg'] / FirstAvg)
+                MedATT = (ary['Med'] / FirstMed)
+                ModATT = (ary['Mod'] / FirstMod)
                 print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
                 print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
             elif 'REF' in each:
@@ -221,8 +228,8 @@ def run(rollday):
             else:
                 y_range = dn_range
 
-            min_yaxis = int(y_range[k].split('_')[0])
-            max_yaxis = int(y_range[k].split('_')[1])
+            min_yaxis = float(y_range[k].split('_')[0])
+            max_yaxis = float(y_range[k].split('_')[1])
 
             data_types = ['Avg', 'Med', 'Mod']
             for data_type in data_types:
