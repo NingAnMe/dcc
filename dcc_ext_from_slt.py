@@ -1,32 +1,38 @@
 # coding:utf-8
 """
-Created on 2017年9月21日
+Created on 2018年4月10日
 
-@author: wangpeng anning
+@author: anning
 """
-import os, sys, h5py
-from configobj import ConfigObj
-from PB import pb_time
-from dateutil.relativedelta import relativedelta
+import re
+import os
+import sys
+import h5py
+from datetime import datetime
+
 import numpy as np
+from configobj import ConfigObj
+from dateutil.relativedelta import relativedelta
+
+from PB import pb_time
 
 
-def DccFineFile(ipath, ifile, C_date, rolldays):
+def dcc_find_file(ipath, ifile, c_date, rolldays):
     """
     ipath:文件输入路径 其中携带的%YYYY%MM%DD 会根据真实日期替换
     ifile:文件名称   其中携带的%YYYY%MM%DD 会根据真实日期替换
-    C_date:当前日期
+    c_date:当前日期
     rolldays:滚动天数
     return:找到符合条件的所有全路径的文件清单
     """
 
     FileLst = []
-    # C_date 当前时间
+    # c_date 当前时间
     # F_date 向前滚动后的首个日期
     if not isinstance(rolldays, int):
         rolldays = int(rolldays)
-    F_date = C_date - relativedelta(days=(rolldays - 1))
-    while F_date <= C_date:
+    F_date = c_date - relativedelta(days=(rolldays - 1))
+    while F_date <= c_date:
         ymd = F_date.strftime('%Y%m%d')
         # 替换字符中的%YYYY%MM%DD为当前输入时间
         ex_ipath = ipath.replace('%YYYY', ymd[0:4])
@@ -49,13 +55,15 @@ class DccDataRead(object):
     dn:数据集中的DN_ADMS
     ref:数据集中的REF_ADMS
     """
+
     def __init__(self):
-        self.percent = []
-        self.dn = []
-        self.ref = []
+        self.empty = True
+        self.percent = None
+        self.dn = None
+        self.ref = None
         self.FileLst = []
 
-    def Load(self):
+    def load(self):
         for iFile in self.FileLst:
             try:
                 h5File_R = h5py.File(iFile, 'r')
@@ -69,7 +77,7 @@ class DccDataRead(object):
                 print str(e)
 
             # 第一个数据
-            if self.dn == []:
+            if self.empty:
                 self.percent = percent
                 self.dn = dn
                 self.ref = ref
@@ -78,16 +86,17 @@ class DccDataRead(object):
                 self.percent = np.concatenate((self.percent, percent), axis=0)
                 self.dn = np.concatenate((self.dn, dn), axis=1)
                 self.ref = np.concatenate((self.ref, ref), axis=1)
+                self.empty = False
 
 
-def DccDataProcess(data, share):
+def dcc_data_process(data, share):
     """
     计算所有通道指定的，3x3 或是 5x5或是其他区域的均值，中值，和概率密度
     """
     # 均值
     # 过滤无效值
 
-#     print mean.shape
+    #     print mean.shape
     dataMean = []
     dataMedian = []
     dataMode = []
@@ -115,22 +124,9 @@ def DccDataProcess(data, share):
     dataMode = np.array(dataMode)
 
     return dataMean, dataMedian, dataMode
-#     mean = np.mean(data, (1,))
-#     mean = np.nanmean(newdata, axis=1)
-    # 中值
-#     median = np.median(data, (1,))
-#     median = np.nanmedian(newdata, axis=1)
-    # 概率密度
-#     mode = []
-#     for i in xrange(data.shape[0]):
-#         hist, bin_edges = np.histogram(data[i], share)
-#         idx = np.argmax(hist)
-#         mode.append(bin_edges[idx])
-#     mode = np.array(mode)
-#     return mean, median, mode
 
 
-def DccDataWrite(title, data, outFile):
+def dcc_data_write(title, data, outFile):
     """
     title: 标题
     data： 数据体
@@ -170,6 +166,23 @@ def DccDataWrite(title, data, outFile):
         fp.close()
 
 
+def get_file_list(dir_path, pattern=r'.*'):
+    """
+    查找目录下的所有符合匹配模式的文件的绝对路径，包括文件夹中的文件
+    :param dir_path: (str)目录路径
+    :param pattern: (str)匹配模式 'hdf'
+    :return: (list) 绝对路径列表
+    """
+    file_list = []
+    # 递归查找目录下所有文件
+    for root, dir_list, file_names in os.walk(dir_path):
+        for i in file_names:
+            m = re.match(pattern, i)
+            if m:
+                file_list.append(os.path.join(root, i))
+    return file_list
+
+
 def run(rollday):
     rollday = rollday
 
@@ -179,24 +192,25 @@ def run(rollday):
     percent = int(inCfg['ext'][satFlag]['percent'])
     share = int(inCfg['ext'][satFlag]['share'])
     window = int(inCfg['ext'][satFlag]['window'])
+    # lanch_date = inCfg['ext'][satFlag]['lanch_date']
     # 按天处理
     date_s, date_e = pb_time.arg_str2date(str_time)
     while date_s <= date_e:
         ymd = date_s.strftime('%Y%m%d')
 
         ######### 一、查找当前天滚动后的所有文件 ##############
-        FileLst = DccFineFile(ipath, ifile, date_s, rollday)
+        FileLst = dcc_find_file(ipath, ifile, date_s, rollday)
 
         ######### 二、读取所rolldays条件内所有文件并对数据累加 #############
         dcc = DccDataRead()
         dcc.FileLst = FileLst
-        dcc.Load()
+        dcc.load()
         if len(FileLst) != 0:
             ######### 三、计算中值，均值，概率密度 #############################
 
-            Dn_mean, Dn_median, Dn_mode = DccDataProcess(dcc.dn[:, :, window],
-                                                         share)
-            Ref_mean, Ref_median, Ref_mode = DccDataProcess(
+            Dn_mean, Dn_median, Dn_mode = dcc_data_process(dcc.dn[:, :, window],
+                                                           share)
+            Ref_mean, Ref_median, Ref_mode = dcc_data_process(
                 dcc.ref[:, :, window], share)
             print 'rollday: %s, date: %s' % (rollday, ymd)
             ######### 四、写入数据，按照通道进行输出，规范dcc输出格式 ###########
@@ -206,9 +220,8 @@ def run(rollday):
                 if i >= 4 and 'FY3C+MERSI' in satFlag:
                     band = band + 1
                 ##### 1、拼接文件名
-                dnName = 'DCC_%s_DN_CH_%02d_Rolldays_%s_ALL.txt' % (satFlag,
-                                                                    band,
-                                                                    rollday)
+                dnName = 'DCC_%s_DN_CH_%02d_Rolldays_%s_ALL_Daily.txt' % (
+                    satFlag, band, rollday)
 
                 ##### 2、拼接完整输出文件
                 dnOutFile = os.path.join(mpath, rollday, dnName)
@@ -223,16 +236,16 @@ def run(rollday):
                     ymd, Dn_mean[i], Dn_median[i], Dn_mode[i],
                     dccFiles, DnPoints, percent, window)
                 ##### 4、写入文件
-                DccDataWrite(Title, Data, dnOutFile)
+                dcc_data_write(Title, Data, dnOutFile)
+
             ######### 写入Ref值
             for i in range(Ref_mean.shape[0]):
                 band = i + 1
                 if i >= 4 and 'FY3C+MERSI' in satFlag:
                     band = band + 1
                 ##### 1、拼接文件名
-                refName = 'DCC_%s_REF_CH_%02d_Rolldays_%s_ALL.txt' % (satFlag,
-                                                                      band,
-                                                                      rollday)
+                refName = 'DCC_%s_REF_CH_%02d_Rolldays_%s_ALL_Daily.txt' % (
+                    satFlag, band, rollday)
 
                 ##### 2、拼接完整输出文件
                 refOutFile = os.path.join(mpath, rollday, refName)
@@ -247,9 +260,95 @@ def run(rollday):
                     ymd, Ref_mean[i], Ref_median[i], Ref_mode[i],
                     dccFiles, RefPoints, percent, window)
                 ##### 4、写入文件
-                DccDataWrite(Title, Data, refOutFile)
+                dcc_data_write(Title, Data, refOutFile)
 
         date_s = date_s + relativedelta(days=1)
+    print 'success daily: %s' % rollday
+
+    # 计算月平均
+    in_file = os.path.join(mpath, rollday)
+    file_list = get_file_list(in_file, r'.*Daily')
+    for day_file in file_list:
+        out_file = day_file.replace('Daily', 'Monthly')
+        title = ('%-15s' * 8 + '\n') % (
+            'date', 'Avg', 'Med', 'Mod', 'dccFiles',
+            'dccPoint', 'dccPrecent', 'dccDim')
+
+        day_datas = load_day_ext(day_file)
+
+        month_data = month_average(day_datas)
+
+        with open(out_file, 'w') as f:
+            f.write(title)
+            f.writelines(month_data)
+    print 'success Monthly: %s' % rollday
+
+
+def load_day_ext(ext_file):
+    """
+    读取日的 EXT 文件，返回 np.array
+    :param ext_file:
+    :return:
+    """
+    names = ('date', 'avg', 'med', 'mod',
+             'dcc_files', 'dcc_point', 'dcc_precent', 'dcc_dim')
+    formats = ('object', 'f4', 'f4', 'f4',
+               'i4', 'i4', 'i4', 'i4')
+
+    data = np.loadtxt(ext_file,
+                      converters={0: lambda x: datetime.strptime(x, "%Y%m%d")},
+                      dtype={'names': names,
+                             'formats': formats},
+                      skiprows=1, ndmin=1)
+    return data
+
+
+def month_average(day_data):
+    """
+    由 EXT 日数据生成 EXT 月平均数据
+    :param day_data: EXT 日数据
+    :return:
+    """
+    month_datas = []
+    ymd_s = day_data['date'][0]  # 第一天日期
+    ymd_e = day_data['date'][-1]  # 最后一天日期
+    date_s = ymd_s - relativedelta(days=(ymd_s.day - 1))  # 第一个月第一天日期
+
+    while date_s <= ymd_e:
+        # 当月最后一天日期
+        date_e = date_s + relativedelta(months=1) - relativedelta(days=1)
+
+        # 查找当月所有数据
+        day_date = day_data['date']
+        month_idx = np.where(np.logical_and(day_date >= date_s,
+                                            day_date <= date_e))
+
+        avg_month = day_data['avg'][month_idx]
+        med_month = day_data['med'][month_idx]
+        mod_month = day_data['mod'][month_idx]
+        dcc_files_month = day_data['dcc_files'][month_idx]
+        dcc_point_month = day_data['dcc_point'][month_idx]
+        dcc_precent_month = day_data['dcc_precent'][month_idx]
+        dcc_dim_month = day_data['dcc_dim'][month_idx]
+
+        ymd_data = date_s.strftime('%Y%m%d')
+        avg_data = avg_month.mean()
+        med_data = med_month.mean()
+        mod_data = mod_month.mean()
+        dcc_files_data = dcc_files_month.sum()
+        dcc_point_data = dcc_point_month.sum()
+        dcc_precent_data = dcc_precent_month[0]
+        dcc_dim_data = dcc_dim_month[0]
+
+        data = ('%-15s' + '%-15.6f' * 3 + '%-15d' * 4 + '\n') % (
+            ymd_data, avg_data, med_data, mod_data,
+            dcc_files_data, dcc_point_data, dcc_precent_data, dcc_dim_data)
+
+        month_datas.append(data)
+
+        date_s = date_s + relativedelta(months=1)
+
+    return month_datas
 
 
 ########################### 主程序入口 ############################

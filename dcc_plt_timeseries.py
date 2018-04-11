@@ -2,7 +2,7 @@
 """
 Created on 2017年9月21日
 
-@author: wangpeng
+@author: wangpeng anning
 """
 import os
 import sys
@@ -10,10 +10,9 @@ from datetime import datetime
 from configobj import ConfigObj
 
 import numpy as np
-from matplotlib.ticker import MultipleLocator, MaxNLocator, LinearLocator, IndexLocator
+from matplotlib.ticker import MultipleLocator
 
 from PB import pb_time, pb_io
-from DV import dv_plt
 from DV.dv_pub_legacy import plt, mdates, set_tick_font, FONT0
 
 from DM.SNO.dm_sno_cross_calc_map import RED, BLUE, EDGE_GRAY, ORG_NAME, mpatches
