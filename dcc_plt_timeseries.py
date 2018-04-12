@@ -8,6 +8,7 @@ import os
 import sys
 from datetime import datetime
 from configobj import ConfigObj
+from dateutil.relativedelta import relativedelta
 
 import numpy as np
 from matplotlib.ticker import MultipleLocator
@@ -18,15 +19,17 @@ from DV.dv_pub_legacy import plt, mdates, set_tick_font, FONT0
 from DM.SNO.dm_sno_cross_calc_map import RED, BLUE, EDGE_GRAY, ORG_NAME, mpatches
 
 
-def DccDataRead(iFile):
-    names = ['ymd', 'Avg', 'Med', 'Mod', 'dccFiles',
-             'dccPoint', 'dccPrecent', 'dccDim']
-    formats = ['object', 'f4', 'f4', 'f4', 'i4', 'i4', 'i4', 'i4']
+def dcc_data_read(in_file):
+    names = ('date', 'avg', 'med', 'mod',
+             'dcc_files', 'dcc_point', 'dcc_precent', 'dcc_dim')
+    formats = ('object', 'f4', 'f4', 'f4',
+               'i4', 'i4', 'i4', 'i4')
 
     # 加载txt文
-    arys = np.loadtxt(iFile,
-                      dtype={'names': tuple(names),
-                             'formats': tuple(formats)},
+    arys = np.loadtxt(in_file,
+                      converters={0: lambda x: datetime.strptime(x, "%Y%m%d")},
+                      dtype={'names': names,
+                             'formats': formats},
                       skiprows=1, ndmin=1)
 
     return arys
@@ -34,10 +37,7 @@ def DccDataRead(iFile):
 
 def setXLocator(ax, xlim_min, xlim_max):
     day_range = (xlim_max - xlim_min).days
-#     if day_range <= 2:
-#         days = mdates.HourLocator(interval=4)
-#         ax.xaxis.set_major_locator(days)
-#         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H'))
+
     if day_range <= 60:
         days = mdates.DayLocator(interval=(day_range / 6))
         ax.xaxis.set_major_locator(days)
@@ -50,7 +50,7 @@ def setXLocator(ax, xlim_min, xlim_max):
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
         elif month_range <= 24.:
             months = mdates.MonthLocator(interval=2)
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+            ax.xaxis.set_major_locator(months)
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
         elif month_range <= 48.:
             months = mdates.MonthLocator(interval=4)
@@ -89,8 +89,8 @@ def add_year_xaxis(ax, xlim_min, xlim_max):
     newax.xaxis.set_tick_params(length=5)
 
 
-def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
-              ylim_min, ylim_max):
+def plot_bias(date_D, bias_D, date_M, bias_M, picPath, title,
+              date_s, date_e, each, date_type, ylim_min, ylim_max):
     """
     画偏差时序折线图
     """
@@ -101,6 +101,8 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
     plt.plot(date_D, bias_D, 'x', ms=6,
              markerfacecolor=None, markeredgecolor=BLUE, alpha=0.8,
              mew=0.3, label='Daily')
+    plt.plot(date_M, bias_M, 'o-', ms=5, lw=0.6, c=RED,
+             mew=0, label='Monthly')
 
     plt.grid(True)
     plt.ylabel('%s %s' % (each, date_type), fontsize=11, fontproperties=FONT0)
@@ -115,12 +117,12 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
 
     ax = plt.gca()
     # format the ticks
-    interval = (ylim_max - ylim_min) / 8
+    interval = (ylim_max - ylim_min) / 8  # 8 个间隔
     minibar = interval / 2.
     setXLocator(ax, xlim_min, xlim_max)
     set_tick_font(ax)
 
-    # 如果范围为浮点数，需要进行一次格式化，否则图像会少显示最后一个刻度
+    # 如果范围为浮点数，需要进行一次格式化，否则图像不会显示最后一个刻度
     if isinstance(interval, float):
         interval = float('%.5f' % interval)
         minibar = float('%.5f' % minibar)
@@ -132,14 +134,15 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
     plt.title(title, fontsize=12, fontproperties=FONT0)
 
     plt.tight_layout()
-    #--------------------
+    # --------------------
     fig.subplots_adjust(bottom=0.2)
 
     circle1 = mpatches.Circle((74, 15), 6, color=BLUE, ec=EDGE_GRAY, lw=0)
-    # circle2 = mpatches.Circle((164, 15), 6, color=RED, ec=EDGE_GRAY, lw=0)
-    fig.patches.extend([circle1])
+    circle2 = mpatches.Circle((164, 15), 6, color=RED, ec=EDGE_GRAY, lw=0)
+    fig.patches.extend([circle1, circle2])
 
     fig.text(0.15, 0.02, 'Daily', color=BLUE, fontproperties=FONT0)
+    fig.text(0.3, 0.02, 'Monthly', color=RED, fontproperties=FONT0)
 
     ymd_s, ymd_e = date_s.strftime('%Y%m%d'), date_e.strftime('%Y%m%d')
     if ymd_s != ymd_e:
@@ -148,7 +151,7 @@ def plot_bias(date_D, bias_D, picPath, title, date_s, date_e, each, date_type,
         fig.text(0.50, 0.02, '%s' % ymd_s, fontproperties=FONT0)
 
     fig.text(0.8, 0.02, ORG_NAME, fontproperties=FONT0)
-    #---------------
+    # ---------------
     pb_io.make_sure_path_exists(os.path.dirname(picPath))
     plt.savefig(picPath)
     fig.clear()
@@ -180,47 +183,90 @@ def run(rollday):
     for each in var:
         for k, ch in enumerate(band):
             print each, ch
-            FileName = 'DCC_%s_%s_%s_Rolldays_%s_ALL.txt' % (
+            # 日数据
+            filename_day = 'DCC_%s_%s_%s_Rolldays_%s_ALL_Daily.txt' % (
                 satFlag, each, ch, rollday)
-            DccFile = os.path.join(ipath, rollday, FileName)
+            dcc_file_day = os.path.join(ipath, rollday, filename_day)
+            # 月数据
+            filename_month = 'DCC_%s_%s_%s_Rolldays_%s_ALL_Monthly.txt' % (
+                satFlag, each, ch, rollday)
+            dcc_file_month = os.path.join(ipath, rollday, filename_month)
             ######### 一、读取dcc提取后的标准文件 ##############
-            ary = DccDataRead(DccFile)
+            ary_day = dcc_data_read(dcc_file_day)
+            ary_month = dcc_data_read(dcc_file_month)
 
-            ######### 二、计算衰减  ##############
-            idx = np.where(ary['ymd'] == lanch_date)
-            FirstAvg = ary['Avg'][idx]
-            FirstMed = ary['Med'][idx]
-            FirstMod = ary['Mod'][idx]
+            ######### 二、计算衰减(日数据)  ##############
+            date_day = ary_day['date']
+
+            idx = np.where(ary_day['date'] == datetime.strptime(lanch_date,
+                                                                '%Y%m%d'))
+            first_avg = ary_day['avg'][idx]
+            first_med = ary_day['med'][idx]
+            first_mod = ary_day['mod'][idx]
             # 如果是 DN，需要计算和发星第一天的相对百分比
             if 'DN' in each:
-                AvgATT = (ary['Avg'] / FirstAvg)
-                MedATT = (ary['Med'] / FirstMed)
-                ModATT = (ary['Mod'] / FirstMod)
-                print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
-                print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
+                avg_day = ary_day['avg'] / first_avg
+                med_day = ary_day['med'] / first_med
+                mod_day = ary_day['mod'] / first_mod
             elif 'REF' in each:
                 # 如果是绘制相对偏差，已经是计算好的相对百分比，不需要除100
                 # sat2 存在，代表是绘制两颗卫星的相对偏差
                 if sat2:
-                    AvgATT = ary['Avg']
-                    MedATT = ary['Med']
-                    ModATT = ary['Mod']
-                    print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
-                    print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
+                    avg_day = ary_day['avg']
+                    med_day = ary_day['med']
+                    mod_day = ary_day['mod']
                 # 如果是绘制自身 REF 变化，需要除 100，还原 REF 真实值
                 else:
-                    AvgATT = ary['Avg'] / 100.
-                    MedATT = ary['Med'] / 100.
-                    ModATT = ary['Mod'] / 100.
-                    print 'max: avg med mod', AvgATT.max(), MedATT.max(), ModATT.max()
-                    print 'min: avg med mod', AvgATT.min(), MedATT.min(), ModATT.min()
-            datas = {
-                'AvgATT': AvgATT,
-                'MedATT': MedATT,
-                'ModATT': ModATT,
+                    avg_day = ary_day['avg'] / 100.
+                    med_day = ary_day['med'] / 100.
+                    mod_day = ary_day['mod'] / 100.
+            else:
+                print 'error: %s is not supported.' % each
+                return
+            print 'max: avg med mod', \
+                avg_day.max(), med_day.max(), mod_day.max()
+            print 'min: avg med mod', \
+                avg_day.min(), med_day.min(), mod_day.min()
+            datas_day = {
+                'avg_day': avg_day,
+                'med_day': med_day,
+                'mod_day': mod_day,
             }
 
-            ######## 三、绘图   ###################
+            ######### 三、格式化数据(月数据)  ##############
+            date_month = ary_month['date'] + relativedelta(days=14)
+            # 如果是 DN，需要计算和发星第一天的相对百分比
+            if 'DN' in each:
+                avg_month = ary_month['avg'] / first_avg
+                med_month = ary_month['med'] / first_med
+                mod_month = ary_month['mod'] / first_mod
+
+            elif 'REF' in each:
+                # 如果是绘制相对偏差，已经是计算好的相对百分比，不需要除100
+                # sat2 存在，代表是绘制两颗卫星的相对偏差
+                if sat2:
+                    avg_month = ary_month['avg']
+                    med_month = ary_month['med']
+                    mod_month = ary_month['mod']
+                # 如果是绘制自身 REF 变化，需要除 100，还原 REF 真实值
+                else:
+                    avg_month = ary_month['avg'] / 100.
+                    med_month = ary_month['med'] / 100.
+                    mod_month = ary_month['mod'] / 100.
+            else:
+                print 'error: %s is not supported.' % each
+                return
+            print 'max: avg med mod', avg_month.max(), \
+                med_month.max(), mod_month.max()
+            print 'min: avg med mod', avg_month.min(), \
+                med_month.min(), mod_month.min()
+            datas_month = {
+                'avg_month': avg_month,
+                'med_month': med_month,
+                'mod_month': mod_month,
+            }
+
+            ######## 四、绘图   ###################
             # 绘图 y 轴的数据范围
             if each == 'REF':
                 y_range = ref_range
@@ -230,7 +276,7 @@ def run(rollday):
             min_yaxis = float(y_range[k].split('_')[0])
             max_yaxis = float(y_range[k].split('_')[1])
 
-            data_types = ['Avg', 'Med', 'Mod']
+            data_types = ['avg', 'med', 'mod']
             for data_type in data_types:
                 ymd_e = date_e.strftime('%Y%m%d')
                 outPng = os.path.join(
@@ -238,17 +284,20 @@ def run(rollday):
                     'DCC_%s_%s_%s_Rolldays_%s_Timeseries_%s.png' % (
                         satFlag, each, ch, rollday, data_type))
 
-                date_D = []
-                for i in xrange(len(ary['ymd'])):
-                    dtime = datetime.strptime(ary['ymd'][i], '%Y%m%d')
-                    date_D.append(dtime)
+                date_D = date_day
+                date_M = date_month
+
                 if sat2:
                     title = '%s Minus %s %s TimeSeries' % (sat1, sat2, ch)
                 else:
                     title = '%s %s TimeSeries' % (sat1, ch)
-                print title
-                data_name = '%sATT' % data_type
-                data_D = datas.get(data_name)
+
+                data_D_name = '%s_day' % data_type
+                data_D = datas_day.get(data_D_name)
+                data_M_name = '%s_month' % data_type
+                data_M = datas_month.get(data_M_name)
+
+                name = ''
                 if each == 'DN':
                     name = 'Degradation'  # DN 的图像上面 ylabel 名字
                 elif each == 'REF':
@@ -257,8 +306,8 @@ def run(rollday):
                     else:
                         name = 'REF'  # REF 的图像上面 ylabel 名字
 
-                plot_bias(date_D, data_D, outPng, title, date_s, date_e,
-                          name, data_type, min_yaxis, max_yaxis)
+                plot_bias(date_D, data_D, date_M, data_M, outPng, title,
+                          date_s, date_e, name, data_type, min_yaxis, max_yaxis)
                 print(outPng)
 
 
