@@ -109,7 +109,7 @@ def dcc_data_process(data, share):
             median = np.median(data[i, idx])
             hist, bin_edges = np.histogram(data[i, idx], share)
             idx = np.argmax(hist)
-            mode = bin_edges[idx]
+            mode = (bin_edges[idx] + bin_edges[idx + 1]) / 2
 
         else:  # 否则添加无效值
             mean = np.nan
