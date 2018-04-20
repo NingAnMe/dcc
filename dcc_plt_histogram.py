@@ -93,7 +93,7 @@ def draw_histogram(filename, dvalues,
     """
     画直方图
     """
-    plt.style.use(os.path.join(dvPath, 'dv_pub_legacy.mplstyle'))
+    plt.style.use(os.path.join(dvPath, 'dv_pub_regression.mplstyle'))
 
     alpha = 1
     fig = plt.figure(figsize=(6, 4))
@@ -170,7 +170,7 @@ def run():
                 titledict = {'title': title, 'xlabel': xlabel,
                              'ylabel': ylabel}
 
-                tl_list = [['{:15}: {:7.4f}'.format('Mode', mode),
+                tl_list = [['{}: {:.4f}'.format('Mode', mode),
                             ]]  # 左边注释
 
                 draw_histogram(out_pic, data, titledict=titledict,

@@ -94,7 +94,7 @@ def plot_bias(date_D, bias_D, date_M, bias_M, picPath, title,
     """
     画偏差时序折线图
     """
-    plt.style.use(os.path.join(dvPath, 'dv_pub_legacy.mplstyle'))
+    plt.style.use(os.path.join(dvPath, 'dv_pub_timeseries.mplstyle'))
     fig = plt.figure(figsize=(6, 4))
 #     plt.subplots_adjust(left=0.13, right=0.95, bottom=0.11, top=0.97)
 
@@ -110,7 +110,7 @@ def plot_bias(date_D, bias_D, date_M, bias_M, picPath, title,
     xlim_min = pb_time.ymd2date('%04d%02d01' % (date_s.year, date_s.month))
     xlim_max = date_e
 
-    plt.plot([xlim_min, xlim_max], [0, 0], 'k')  # 在 y = 0 绘制一条黑色直线
+    plt.plot([xlim_min, xlim_max], [0, 0], '#808080')  # 在 y=0 绘制一条深灰色直线
 
     plt.xlim(xlim_min, xlim_max)
     plt.ylim(ylim_min, ylim_max)
